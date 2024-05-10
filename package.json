@@ -4,6 +4,14 @@
   "description": "An ESLint plugin to identify and fix breaking changes when upgrading React 18 to React 19",
   "main": "index.js",
   "author": "Brett Farrow",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brettfarrow/eslint-plugin-react-19-upgrade.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brettfarrow/eslint-plugin-react-19-upgrade/issues"
+  },
+  "homepage": "https://github.com/brettfarrow/eslint-plugin-react-19-upgrade",
   "license": "MIT",
   "peerDependencies": {
     "eslint": ">=7.0.0"
