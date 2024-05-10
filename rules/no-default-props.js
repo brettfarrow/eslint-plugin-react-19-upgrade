@@ -14,6 +14,7 @@ module.exports = {
   create(context) {
     return {
       AssignmentExpression(node) {
+        // Ensure that this assignment is for defaultProps of a component
         if (
           node.left.type === "MemberExpression" &&
           node.left.property.name === "defaultProps" &&
@@ -26,57 +27,72 @@ module.exports = {
               "Move defaultProps to default parameters in the destructured props.",
             fix(fixer) {
               const sourceCode = context.getSourceCode();
-              const defaults = node.right.properties
-                .map((prop) => {
-                  const key = prop.key.name;
-                  const value = sourceCode.getText(prop.value);
-                  return `${key} = ${value}`;
-                })
-                .join(", ");
+              const defaultProps = node.right.properties.reduce((acc, prop) => {
+                acc[prop.key.name] = sourceCode.getText(prop.value);
+                return acc;
+              }, {});
 
-              // Locate the functional component
-              const componentDeclaration = sourceCode.ast.body.find(
-                (n) =>
-                  (n.type === "FunctionDeclaration" ||
-                    n.type === "VariableDeclaration") &&
-                  n.id &&
-                  n.id.name === node.left.object.name,
-              );
+              // Locate the variable declaration of the component
+              const componentVariable = context
+                .getScope()
+                .variables.find((v) => v.name === node.left.object.name);
 
-              if (!componentDeclaration) {
+              if (!componentVariable || componentVariable.defs.length === 0) {
                 return null; // Component definition not found
               }
 
+              const componentDefinition = componentVariable.defs[0].node;
               const componentNode =
-                componentDeclaration.type === "VariableDeclaration"
-                  ? componentDeclaration.declarations[0].init
-                  : componentDeclaration;
+                componentDefinition.init || componentDefinition;
 
-              // Assuming the first parameter is destructured
-              const params = componentNode.params[0];
+              // Prepare fixes to replace function parameters and remove defaultProps
+              const fixes = [];
 
-              if (params && params.type === "ObjectPattern") {
-                const existingDefaults = params.properties.map((prop) => {
-                  if (prop.value && prop.value.type === "AssignmentPattern") {
-                    return `${prop.key.name} = ${sourceCode.getText(
-                      prop.value.right,
-                    )}`;
-                  }
-                  return prop.key.name;
-                });
+              if (
+                componentNode &&
+                componentNode.params &&
+                componentNode.params[0] &&
+                componentNode.params[0].type === "ObjectPattern"
+              ) {
+                const params = componentNode.params[0];
+                const existingParams = params.properties
+                  .map((prop) => {
+                    const propName = prop.key.name;
+                    if (prop.value && prop.value.type === "AssignmentPattern") {
+                      // Leave existing defaults as is
+                      return `${propName} = ${sourceCode.getText(
+                        prop.value.right,
+                      )}`;
+                    } else if (defaultProps[propName]) {
+                      // Add default from defaultProps
+                      return `${propName} = ${defaultProps[propName]}`;
+                    }
+                    return propName; // No default to add
+                  })
+                  .join(", ");
 
-                const newParams = `{ ${existingDefaults.join(
-                  ", ",
-                )}, ${defaults} }`;
-                return fixer.replaceText(params, newParams);
+                const newParamsText = `{ ${existingParams} }`;
+                fixes.push(fixer.replaceText(params, newParamsText));
               } else {
-                // If there are no parameters or they are not destructured
-                const newParams = `{ ${defaults} }`;
-                return fixer.insertTextBefore(
-                  componentNode.body,
-                  `(${newParams}) => `,
+                // If no parameters, create new destructured object with defaults
+                const newParams = Object.entries(defaultProps)
+                  .map(([key, value]) => `${key} = ${value}`)
+                  .join(", ");
+                const newParamsText = `{ ${newParams} }`;
+                fixes.push(
+                  fixer.insertTextBefore(
+                    componentNode.body,
+                    `(${newParamsText}) => `,
+                  ),
                 );
               }
+
+              // Remove the defaultProps assignment more cleanly
+              const start = node.range[0];
+              const end = sourceCode.getTokenAfter(node).range[1];
+              fixes.push(fixer.removeRange([start, end]));
+
+              return fixes;
             },
           });
         }
