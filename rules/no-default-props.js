@@ -5,11 +5,16 @@ module.exports = {
     docs: {
       description:
         "Move defaultProps to default function parameters in destructured props",
-      // url: "", // TODO: Add docs URL
+      url: "https://react.dev/blog/2024/04/25/react-19-upgrade-guide#removed-proptypes-and-defaultprops",
+    },
+    messages: {
+      defaultPropsDisallowed:
+        "'defaultProps' should not be used in '{{name}}' as they are no longer supported in React 19. Use default parameters instead.",
     },
     fixable: "code", // Allows the rule to be automatically fixed
     schema: [], // No configuration options for this rule
     ruleId: "no-default-props",
+    hasSuggestions: true,
   },
   create(context) {
     return {
@@ -22,8 +27,8 @@ module.exports = {
         ) {
           context.report({
             node,
-            message:
-              "Move defaultProps to default parameters in the destructured props.",
+            messageId: "defaultPropsDisallowed",
+            data: { name: node.left.object.name },
             fix(fixer) {
               const sourceCode = context.sourceCode ?? context.getSourceCode();
               const defaultProps = node.right.properties.reduce((acc, prop) => {

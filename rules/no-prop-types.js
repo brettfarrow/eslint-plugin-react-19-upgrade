@@ -4,7 +4,7 @@ module.exports = {
     type: "problem", // It's about potentially incorrect or outdated practices.
     docs: {
       description: "Disallow the use of propTypes in React components",
-      // url: "URL-to-documentation" // Provide URL to your rule documentation if available
+      url: "https://react.dev/blog/2024/04/25/react-19-upgrade-guide#removed-proptypes-and-defaultprops",
     },
     messages: {
       propTypesDisallowed:
@@ -12,6 +12,7 @@ module.exports = {
     },
     schema: [], // No configuration options for this rule
     ruleId: "no-prop-types",
+    hasSuggestions: true,
   },
   create(context) {
     return {

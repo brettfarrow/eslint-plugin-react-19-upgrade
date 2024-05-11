@@ -30,7 +30,7 @@ try {
         errors: [
           {
             message:
-              "Move defaultProps to default parameters in the destructured props.",
+              "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
           },
         ],
         output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; `,
