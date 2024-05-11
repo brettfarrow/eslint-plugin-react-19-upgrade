@@ -47,8 +47,17 @@ try {
     valid: [`const Component = ({ name }) => <div>{name}</div>;`],
     invalid: [
       {
-        code: `const Component = ({ name }) => <div>{name}</div>; Component.propTypes = { name: PropTypes.string };`,
+        code: `import PropTypes from 'prop-types';
+        
+        const Component = ({ name }) => <div>{name}</div>;
+        
+        Component.propTypes = { name: PropTypes.string };`,
         errors: [
+          {
+            message:
+              "'prop-types' should not be imported in '<input>' as they are no longer supported in React 19.",
+            type: "ImportDefaultSpecifier", // TODO: This is an ImportDeclaration in the code, determine why that type isn't returned
+          },
           {
             message:
               "'propTypes' should not be used in 'Component' as they are no longer supported in React 19.",

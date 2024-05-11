@@ -9,6 +9,8 @@ module.exports = {
     messages: {
       propTypesDisallowed:
         "'propTypes' should not be used in '{{name}}' as they are no longer supported in React 19.",
+      propTypesImportDisallowed:
+        "'prop-types' should not be imported in '{{name}}' as they are no longer supported in React 19.",
     },
     schema: [], // No configuration options for this rule
     ruleId: "no-prop-types",
@@ -16,6 +18,28 @@ module.exports = {
   },
   create(context) {
     return {
+      ImportDeclaration(node) {
+        if (node.source.value === "prop-types") {
+          node.specifiers.forEach((specifier) => {
+            if (specifier.local && specifier.local.name === "PropTypes") {
+              const filename = context.filename ?? context.getFilename();
+              const name = filename
+                .split("/") // unix file paths
+                .pop()
+                .split("\\") // windows file paths
+                .pop()
+                .split(".")[0]; // remove extension
+              context.report({
+                node: specifier,
+                messageId: "propTypesImportDisallowed",
+                data: {
+                  name,
+                },
+              });
+            }
+          });
+        }
+      },
       AssignmentExpression(node) {
         if (
           node.left.type === "MemberExpression" &&
