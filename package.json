@@ -13,6 +13,9 @@
   },
   "homepage": "https://github.com/brettfarrow/eslint-plugin-react-19-upgrade",
   "license": "MIT",
+  "scripts": {
+    "test": "node tests/tests.js"
+  },
   "peerDependencies": {
     "eslint": ">=7.0.0"
   },
@@ -20,5 +23,9 @@
     "eslint",
     "eslintplugin",
     "react"
-  ]
+  ],
+  "devDependencies": {
+    "@babel/eslint-parser": "^7.24.5",
+    "eslint": "^9.2.0"
+  }
 }
