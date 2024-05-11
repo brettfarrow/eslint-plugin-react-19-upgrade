@@ -25,16 +25,19 @@ module.exports = {
             message:
               "Move defaultProps to default parameters in the destructured props.",
             fix(fixer) {
-              const sourceCode = context.getSourceCode();
+              const sourceCode = context.sourceCode ?? context.getSourceCode();
               const defaultProps = node.right.properties.reduce((acc, prop) => {
                 acc[prop.key.name] = sourceCode.getText(prop.value);
                 return acc;
               }, {});
 
               // Locate the variable declaration of the component
-              const componentVariable = context
-                .getScope()
-                .variables.find((v) => v.name === node.left.object.name);
+              const scope = sourceCode.getScope
+                ? sourceCode.getScope(node)
+                : context.getScope();
+              const componentVariable = scope.variables.find(
+                (v) => v.name === node.left.object.name,
+              );
 
               if (!componentVariable || componentVariable.defs.length === 0) {
                 return null; // Component definition not found
