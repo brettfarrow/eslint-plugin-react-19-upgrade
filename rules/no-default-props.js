@@ -14,7 +14,6 @@ module.exports = {
   create(context) {
     return {
       AssignmentExpression(node) {
-        // Ensure that this assignment is for defaultProps of a component
         if (
           node.left.type === "MemberExpression" &&
           node.left.property.name === "defaultProps" &&
@@ -45,9 +44,9 @@ module.exports = {
               const componentNode =
                 componentDefinition.init || componentDefinition;
 
-              // Prepare fixes to replace function parameters and remove defaultProps
               const fixes = [];
 
+              // Update or create function parameters with defaults
               if (
                 componentNode &&
                 componentNode.params &&
@@ -55,26 +54,18 @@ module.exports = {
                 componentNode.params[0].type === "ObjectPattern"
               ) {
                 const params = componentNode.params[0];
-                const existingParams = params.properties
+                const newParams = params.properties
                   .map((prop) => {
                     const propName = prop.key.name;
-                    if (prop.value && prop.value.type === "AssignmentPattern") {
-                      // Leave existing defaults as is
-                      return `${propName} = ${sourceCode.getText(
-                        prop.value.right,
-                      )}`;
-                    } else if (defaultProps[propName]) {
-                      // Add default from defaultProps
-                      return `${propName} = ${defaultProps[propName]}`;
-                    }
-                    return propName; // No default to add
+                    const defaultValue = defaultProps[propName]
+                      ? ` = ${defaultProps[propName]}`
+                      : "";
+                    return `${propName}${defaultValue}`;
                   })
                   .join(", ");
-
-                const newParamsText = `{ ${existingParams} }`;
+                const newParamsText = `{ ${newParams} }`;
                 fixes.push(fixer.replaceText(params, newParamsText));
               } else {
-                // If no parameters, create new destructured object with defaults
                 const newParams = Object.entries(defaultProps)
                   .map(([key, value]) => `${key} = ${value}`)
                   .join(", ");
@@ -87,10 +78,18 @@ module.exports = {
                 );
               }
 
-              // Remove the defaultProps assignment more cleanly
-              const start = node.range[0];
-              const end = sourceCode.getTokenAfter(node).range[1];
-              fixes.push(fixer.removeRange([start, end]));
+              // Conditionally remove semicolon after defaultProps
+              const semicolonToken = sourceCode.getTokenAfter(node);
+              if (
+                semicolonToken &&
+                semicolonToken.type === "Punctuator" &&
+                semicolonToken.value === ";"
+              ) {
+                fixes.push(fixer.remove(semicolonToken));
+              }
+
+              // Remove the defaultProps assignment
+              fixes.push(fixer.remove(node));
 
               return fixes;
             },
