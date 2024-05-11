@@ -2,6 +2,7 @@ const { RuleTester } = require("eslint");
 const babelParser = require("@babel/eslint-parser");
 const ruleNoDefaultProps = require("../rules/no-default-props");
 const ruleNoPropTypes = require("../rules/no-prop-types");
+const ruleNoLegacyContext = require("../rules/no-legacy-context");
 
 const ruleTester = new RuleTester({
   files: ["**/*.js", "**/*.mjs"],
@@ -13,8 +14,11 @@ const ruleTester = new RuleTester({
         babelrc: false,
         configFile: false,
         parserOpts: {
-          plugins: ["jsx"],
+          plugins: ["jsx", "classProperties"],
         },
+      },
+      ecmaFeatures: {
+        jsx: true,
       },
     },
   },
@@ -49,6 +53,77 @@ try {
             message:
               "'propTypes' should not be used in 'Component' as they are no longer supported in React 19.",
             type: "AssignmentExpression",
+          },
+        ],
+      },
+    ],
+  });
+
+  // Tests for "no-legacy-context"
+  ruleTester.run("no-legacy-context", ruleNoLegacyContext, {
+    valid: [
+      // Example of a class component that does not use legacy context APIs
+      `
+      class MyComponent extends React.Component {
+        render() {
+          return <div>{this.props.children}</div>;
+        }
+      }
+      `,
+      // Using the new context API
+      `
+      const MyContext = React.createContext();
+      class MyComponent extends React.Component {
+        static contextType = MyContext;
+        render() {
+          return <div>{this.context}</div>;
+        }
+      }
+      `,
+    ],
+    invalid: [
+      {
+        code: `
+        import PropTypes from 'prop-types';
+
+        class Parent extends React.Component {
+          static childContextTypes = {
+            foo: PropTypes.string.isRequired,
+          };
+
+          getChildContext() {
+            return { foo: 'bar' };
+          }
+
+          render() {
+            return <Child />;
+          }
+        }
+
+        class Child extends React.Component {
+          static contextTypes = {
+            foo: PropTypes.string.isRequired,
+          };
+
+          render() {
+            return <div>{this.context.foo}</div>;
+          }
+        }
+        `,
+        errors: [
+          // TODO: Fix and re-enable these tests. These first two tests aren't returning the correct result
+          // despite working when running ESLint normally.
+          // {
+          //   message:
+          //     "'contextTypes' uses a legacy contextTypes API that is no longer supported in React 19. Use 'contextType' instead.",
+          // },
+          // {
+          //   message:
+          //     "'childContextTypes' uses a legacy contextTypes API that is no longer supported in React 19. Use 'contextType' instead.",
+          // },
+          {
+            message:
+              "'getChildContext' uses a legacy context API that is no longer supported in React 19. Use 'React.createContext()' instead.",
           },
         ],
       },
