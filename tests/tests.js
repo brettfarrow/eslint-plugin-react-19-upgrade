@@ -3,6 +3,7 @@ const babelParser = require("@babel/eslint-parser");
 const ruleNoDefaultProps = require("../rules/no-default-props");
 const ruleNoPropTypes = require("../rules/no-prop-types");
 const ruleNoLegacyContext = require("../rules/no-legacy-context");
+const ruleNoStringRefs = require("../rules/no-string-refs");
 
 const ruleTester = new RuleTester({
   files: ["**/*.js", "**/*.mjs"],
@@ -138,6 +139,22 @@ try {
       },
     ],
   });
+
+  // Test for "no-string-refs"
+  ruleTester.run("no-string-refs", ruleNoStringRefs, {
+    valid: [
+      {
+        code: `<input ref={(input) => this.input = input} />`,
+      },
+    ],
+    invalid: [
+      {
+        code: `<input ref='input' />`,
+        errors: [{ messageId: "noStringRefs", type: "JSXAttribute" }],
+      },
+    ],
+  });
+
   console.log("All tests passed!");
 } catch (error) {
   console.error(error);
