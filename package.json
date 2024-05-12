@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-react-19-upgrade",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "An ESLint plugin to identify and fix breaking changes when upgrading React 18 to React 19",
   "main": "index.js",
   "author": "Brett Farrow",
