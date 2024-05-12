@@ -34,7 +34,8 @@ Then configure the rules you want to use under the rules section.
     "react-19-upgrade/no-default-props": "error",
     "react-19-upgrade/no-prop-types": "warn",
     "react-19-upgrade/no-legacy-context": "error",
-    "react-19-upgrade/no-string-refs": "error"
+    "react-19-upgrade/no-string-refs": "error",
+    "react-19-upgrade/no-factories": "error"
   }
 }
 ```
@@ -45,7 +46,4 @@ Then configure the rules you want to use under the rules section.
 - `no-prop-types`: Avoid using `propTypes` as they are now ignored in React 19.
 - `no-legacy-context`: Disallow the use of legacy context APIs in React class components.
 - `no-string-refs`: Disallow the use of string refs in React components.
-
-## Coming Soon
-
-- other [breaking changes](https://react.dev/blog/2024/04/25/react-19-upgrade-guide#breaking-changes)
+- `no-factories`: Disallow module pattern factories and React.createFactory.
