@@ -3,15 +3,16 @@ module.exports = {
     type: "problem",
     docs: {
       description: "Disallow the use of string refs in React components",
-      category: "Best Practices",
       recommended: true,
-      url: "https://reactjs.org/docs/refs-and-the-dom.html#creating-refs",
+      url: "https://react.dev/blog/2024/04/25/react-19-upgrade-guide#removed-string-refs",
     },
     messages: {
       noStringRefs:
         "String refs are deprecated and will be removed in React 19. Use callback refs instead.",
     },
     schema: [], // No options for this rule
+    ruleId: "no-string-refs",
+    hasSuggestions: true,
   },
   create(context) {
     return {
