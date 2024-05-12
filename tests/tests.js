@@ -4,6 +4,7 @@ const ruleNoDefaultProps = require("../rules/no-default-props");
 const ruleNoPropTypes = require("../rules/no-prop-types");
 const ruleNoLegacyContext = require("../rules/no-legacy-context");
 const ruleNoStringRefs = require("../rules/no-string-refs");
+const ruleNoFactories = require("../rules/no-factories");
 
 const ruleTester = new RuleTester({
   files: ["**/*.js", "**/*.mjs"],
@@ -151,6 +152,23 @@ try {
       {
         code: `<input ref='input' />`,
         errors: [{ messageId: "noStringRefs", type: "JSXAttribute" }],
+      },
+    ],
+  });
+
+  ruleTester.run("no-factories", ruleNoFactories, {
+    valid: [
+      `function FactoryComponent() { return <div />; }`,
+      `const button = <button />;`,
+    ],
+    invalid: [
+      {
+        code: `function FactoryComponent() { return { render() { return <div />; } } }`,
+        errors: [{ messageId: "noModulePattern" }],
+      },
+      {
+        code: `import { createFactory } from 'react'; const divFactory = createFactory('div');`,
+        errors: [{ messageId: "noCreateFactory" }],
       },
     ],
   });
