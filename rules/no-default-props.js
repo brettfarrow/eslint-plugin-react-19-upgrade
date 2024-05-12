@@ -1,4 +1,3 @@
-// rules/no-default-props.js
 module.exports = {
   meta: {
     type: "problem",
@@ -12,7 +11,7 @@ module.exports = {
         "'defaultProps' should not be used in '{{name}}' as they are no longer supported in React 19. Use default parameters instead.",
     },
     fixable: "code", // Allows the rule to be automatically fixed
-    schema: [], // No configuration options for this rule
+    schema: [],
     ruleId: "no-default-props",
     hasSuggestions: true,
   },
@@ -45,16 +44,14 @@ module.exports = {
               );
 
               if (!componentVariable || componentVariable.defs.length === 0) {
-                return null; // Component definition not found
+                return null;
               }
 
               const componentDefinition = componentVariable.defs[0].node;
               const componentNode =
                 componentDefinition.init || componentDefinition;
-
               const fixes = [];
 
-              // Update or create function parameters with defaults
               if (
                 componentNode &&
                 componentNode.params &&
@@ -62,6 +59,14 @@ module.exports = {
                 componentNode.params[0].type === "ObjectPattern"
               ) {
                 const params = componentNode.params[0];
+                const firstProp = params.properties[0];
+                const lastProp =
+                  params.properties[params.properties.length - 1];
+
+                // Check if props are on multiple lines
+                const isMultiline =
+                  firstProp.loc.start.line !== lastProp.loc.end.line;
+
                 const newParams = params.properties
                   .map((prop) => {
                     const propName = prop.key.name;
@@ -70,8 +75,11 @@ module.exports = {
                       : "";
                     return `${propName}${defaultValue}`;
                   })
-                  .join(", ");
-                const newParamsText = `{ ${newParams} }`;
+                  .join(isMultiline ? ",\n" : ", ");
+
+                const newParamsText = isMultiline
+                  ? `{\n${newParams}\n}`
+                  : `{ ${newParams} }`;
                 fixes.push(fixer.replaceText(params, newParamsText));
               } else {
                 const newParams = Object.entries(defaultProps)
@@ -86,7 +94,6 @@ module.exports = {
                 );
               }
 
-              // Conditionally remove semicolon after defaultProps
               const semicolonToken = sourceCode.getTokenAfter(node);
               if (
                 semicolonToken &&
@@ -96,9 +103,7 @@ module.exports = {
                 fixes.push(fixer.remove(semicolonToken));
               }
 
-              // Remove the defaultProps assignment
               fixes.push(fixer.remove(node));
-
               return fixes;
             },
           });
