@@ -4,10 +4,10 @@ An ESLint plugin to identify and fix breaking changes when upgrading React 18 to
 
 ## Installation
 
-You'll first need to install [ESLint](http://eslint.org):
+You'll first need to install [ESLint](https://eslint.org):
 
 ```
-$ npm i eslint --save-dev
+$ npm install eslint --save-dev
 ```
 
 Next, install `eslint-plugin-react-19-upgrade`:
@@ -18,7 +18,7 @@ $ npm install eslint-plugin-react-19-upgrade --save-dev
 
 ## Usage
 
-Add `react-19-upgrade` to the plugins section of your `.eslintrc` configuration file. You can omit the `eslint-plugin-` prefix:
+Add `react-19-upgrade` to the plugins section of your `.eslintrc` or equivalent configuration file. You can omit the `eslint-plugin-` prefix:
 
 ```json
 {
