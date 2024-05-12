@@ -35,17 +35,17 @@ module.exports = {
         }
       },
       // Match import or require of React.createFactory
-      "ImportDeclaration[source.value='react'], VariableDeclarator[init.callee.name='require'][init.arguments.0.value='react']"(
-        node,
-      ) {
-        node.specifiers.forEach((spec) => {
-          if (spec.imported && spec.imported.name === "createFactory") {
-            context.report({
-              node: spec,
-              messageId: "noCreateFactory",
-            });
-          }
-        });
+      ImportDeclaration(node) {
+        if (node.source.value === "react" && node.specifiers) {
+          node.specifiers.forEach((spec) => {
+            if (spec.imported && spec.imported.name === "createFactory") {
+              context.report({
+                node: spec,
+                messageId: "noCreateFactory",
+              });
+            }
+          });
+        }
       },
       "CallExpression[callee.object.name='React'][callee.property.name='createFactory']"(
         node,
