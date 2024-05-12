@@ -1,7 +1,7 @@
 // rules/no-prop-types.js
 module.exports = {
   meta: {
-    type: "problem", // It's about potentially incorrect or outdated practices.
+    type: "suggestion", // It's about potentially incorrect or outdated practices.
     docs: {
       description: "Disallow the use of propTypes in React components",
       url: "https://react.dev/blog/2024/04/25/react-19-upgrade-guide#removed-proptypes-and-defaultprops",

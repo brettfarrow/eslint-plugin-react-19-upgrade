@@ -1,7 +1,7 @@
 // rules/no-default-props.js
 module.exports = {
   meta: {
-    type: "suggestion",
+    type: "problem",
     docs: {
       description:
         "Move defaultProps to default function parameters in destructured props",
