@@ -33,7 +33,8 @@ Then configure the rules you want to use under the rules section.
   "rules": {
     "react-19-upgrade/no-default-props": "error",
     "react-19-upgrade/no-prop-types": "warn",
-    "react-19-upgrade/no-legacy-context": "error"
+    "react-19-upgrade/no-legacy-context": "error",
+    "react-19-upgrade/no-string-refs": "error"
   }
 }
 ```
@@ -43,6 +44,7 @@ Then configure the rules you want to use under the rules section.
 - `no-default-props`: Move `defaultProps` to default parameters in the destructured props. Fixable by ESLint.
 - `no-prop-types`: Avoid using `propTypes` as they are now ignored in React 19.
 - `no-legacy-context`: Disallow the use of legacy context APIs in React class components.
+- `no-string-refs`: Disallow the use of string refs in React components.
 
 ## Coming Soon
 
