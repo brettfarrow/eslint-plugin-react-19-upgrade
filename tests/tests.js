@@ -29,7 +29,22 @@ const ruleTester = new RuleTester({
 try {
   // Test for "no-default-props"
   ruleTester.run("no-default-props", ruleNoDefaultProps, {
-    valid: [`const Component = ({ name }) => <div>{name}</div>;`],
+    valid: [
+      `const Component = ({ name }) => <div>{name}</div>;`,
+      // Class component without defaultProps
+      `
+      import { PureComponent } from 'react'; 
+
+      class ClassComponent extends PureComponent {
+          render() {
+              const { propKey } = this.props;
+              return propKey;
+          }
+      }
+
+      export default ClassComponent;
+      `,
+    ],
     invalid: [
       {
         code: `const Component = ({ name }) => <div>{name}</div>; Component.defaultProps = { name: 'Test' };`,
@@ -40,6 +55,46 @@ try {
           },
         ],
         output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; `,
+      },
+      // Test case from the GitHub issue
+      {
+        code: `
+        import { PureComponent } from 'react'; 
+
+        class ClassComponent extends PureComponent {
+            render() {
+                const { propKey } = this.props;
+                return propKey;
+            }
+        }
+
+        ClassComponent.defaultProps = {
+            propKey: 'propValue',
+        };
+
+        export default ClassComponent;
+        `,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'ClassComponent' as they are no longer supported in React 19. Use default parameters instead.",
+            type: "AssignmentExpression",
+          },
+        ],
+        output: `
+        import { PureComponent } from 'react'; 
+
+        class ClassComponent extends PureComponent {
+            render() {
+                const { propKey = 'propValue' } = this.props;
+                return propKey;
+            }
+        }
+
+        
+
+        export default ClassComponent;
+        `,
       },
     ],
   });
@@ -135,6 +190,7 @@ try {
           {
             message:
               "'getChildContext' uses a legacy context API that is no longer supported in React 19. Use 'React.createContext()' instead.",
+            type: "MethodDefinition",
           },
         ],
       },
