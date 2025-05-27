@@ -48,8 +48,17 @@ module.exports = {
               }
 
               const componentDefinition = componentVariable.defs[0].node;
-              const componentNode =
-                componentDefinition.init || componentDefinition;
+              const componentNode = componentDefinition.init || componentDefinition;
+
+              // Check if it's neither a function component nor a const arrow function
+              if (!componentNode || 
+                  !(componentNode.type === 'FunctionDeclaration' || 
+                    (componentNode.type === 'ArrowFunctionExpression' && 
+                     componentNode.params && 
+                     componentNode.params.length > 0))) {
+                return null; // Return null to indicate that no fix should be attempted
+              }
+
               const fixes = [];
 
               if (
