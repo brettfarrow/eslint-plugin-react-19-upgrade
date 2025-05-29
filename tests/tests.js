@@ -31,15 +31,52 @@ try {
   ruleTester.run("no-default-props", ruleNoDefaultProps, {
     valid: [`const Component = ({ name }) => <div>{name}</div>;`],
     invalid: [
+      // {
+      //   code: `const Component = ({ name }) => <div>{name}</div>; Component.defaultProps = { name: 'Test' };`,
+      //   errors: [
+      //     {
+      //       message:
+      //         "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
+      //     },
+      //   ],
+      //   output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; `,
+      // },
       {
-        code: `const Component = ({ name }) => <div>{name}</div>; Component.defaultProps = { name: 'Test' };`,
+        code: `function Component({name}) { return <div>{name}</div>; } Component.defaultProps = { name: 'Test' };`,
         errors: [
           {
             message:
               "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
           },
         ],
-        output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; `,
+        output: `function Component({ name = 'Test' }) { return <div>{name}</div>; } `,
+      },
+      {
+        code: `const Component = ({ name }) => <div>{name}</div>; const Component2 = Component; Component2.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component2' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
+      },
+      {
+        code: `import Component from './Component'; const Component2 = Component; Component2.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component2' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
+      },
+      {
+        code: `import Component from './Component'; const Component2 = styled(Component)\`\`; Component2.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component2' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
       },
     ],
   });
