@@ -20,7 +20,10 @@ module.exports = {
     return {
       "ClassDeclaration:exit"(node) {
         node.body.body.forEach((member) => {
-          if (member.type === "ClassProperty") {
+          if (
+            member.type === "ClassProperty" ||
+            member.type === "PropertyDefinition"
+          ) {
             if (
               member.key.name === "childContextTypes" ||
               member.key.name === "contextTypes"
