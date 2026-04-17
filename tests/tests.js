@@ -6,6 +6,40 @@ const ruleNoLegacyContext = require("../rules/no-legacy-context");
 const ruleNoStringRefs = require("../rules/no-string-refs");
 const ruleNoFactories = require("../rules/no-factories");
 
+const stats = { passed: 0, failed: 0, suites: [] };
+let currentSuite = null;
+
+RuleTester.describe = function (text, method) {
+  const parent = currentSuite;
+  const suite = { text, depth: parent ? parent.depth + 1 : 0 };
+  currentSuite = suite;
+  const indent = "  ".repeat(suite.depth);
+  console.log(`${indent}${text}`);
+  try {
+    method.call(this);
+  } finally {
+    currentSuite = parent;
+  }
+};
+
+RuleTester.it = function (text, method) {
+  const indent = "  ".repeat((currentSuite ? currentSuite.depth : 0) + 1);
+  const label = text.length > 80 ? `${text.slice(0, 77)}...` : text;
+  try {
+    method.call(this);
+    stats.passed += 1;
+    console.log(`${indent}\u2713 ${label}`);
+  } catch (err) {
+    stats.failed += 1;
+    console.log(`${indent}\u2717 ${label}`);
+    console.log(`${indent}  ${err.message.split("\n").join(`\n${indent}  `)}`);
+  }
+};
+
+RuleTester.itOnly = function (text, method) {
+  return RuleTester.it(text, method);
+};
+
 const ruleTester = new RuleTester({
   files: ["**/*.js", "**/*.mjs"],
   languageOptions: {
@@ -293,8 +327,12 @@ try {
     invalid: [],
   });
 
-  console.log("All tests passed!");
+  console.log(`\n${stats.passed} passed, ${stats.failed} failed`);
+  if (stats.failed > 0) {
+    process.exitCode = 1;
+  }
 } catch (error) {
   console.error(error);
   console.error("One or more tests failed!");
+  process.exitCode = 1;
 }
