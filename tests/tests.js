@@ -6,6 +6,40 @@ const ruleNoLegacyContext = require("../rules/no-legacy-context");
 const ruleNoStringRefs = require("../rules/no-string-refs");
 const ruleNoFactories = require("../rules/no-factories");
 
+const stats = { passed: 0, failed: 0, suites: [] };
+let currentSuite = null;
+
+RuleTester.describe = function (text, method) {
+  const parent = currentSuite;
+  const suite = { text, depth: parent ? parent.depth + 1 : 0 };
+  currentSuite = suite;
+  const indent = "  ".repeat(suite.depth);
+  console.log(`${indent}${text}`);
+  try {
+    method.call(this);
+  } finally {
+    currentSuite = parent;
+  }
+};
+
+RuleTester.it = function (text, method) {
+  const indent = "  ".repeat((currentSuite ? currentSuite.depth : 0) + 1);
+  const label = text.length > 80 ? `${text.slice(0, 77)}...` : text;
+  try {
+    method.call(this);
+    stats.passed += 1;
+    console.log(`${indent}\u2713 ${label}`);
+  } catch (err) {
+    stats.failed += 1;
+    console.log(`${indent}\u2717 ${label}`);
+    console.log(`${indent}  ${err.message.split("\n").join(`\n${indent}  `)}`);
+  }
+};
+
+RuleTester.itOnly = function (text, method) {
+  return RuleTester.it(text, method);
+};
+
 const ruleTester = new RuleTester({
   files: ["**/*.js", "**/*.mjs"],
   languageOptions: {
@@ -29,18 +63,34 @@ const ruleTester = new RuleTester({
 try {
   // Test for "no-default-props"
   ruleTester.run("no-default-props", ruleNoDefaultProps, {
-    valid: [`const Component = ({ name }) => <div>{name}</div>;`],
+    valid: [
+      `const Component = ({ name }) => <div>{name}</div>;`,
+      `
+      import { PureComponent } from 'react';
+
+      class ClassComponent extends PureComponent {
+        render() {
+          const { propKey } = this.props;
+          return propKey;
+        }
+      }
+
+      ClassComponent.defaultProps = {
+        propKey: 'propValue',
+      };
+      `,
+    ],
     invalid: [
-      // {
-      //   code: `const Component = ({ name }) => <div>{name}</div>; Component.defaultProps = { name: 'Test' };`,
-      //   errors: [
-      //     {
-      //       message:
-      //         "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
-      //     },
-      //   ],
-      //   output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; `,
-      // },
+      {
+        code: `const Component = ({ name }) => <div>{name}</div>; Component.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
+        output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; `,
+      },
       {
         code: `function Component({name}) { return <div>{name}</div>; } Component.defaultProps = { name: 'Test' };`,
         errors: [
@@ -52,6 +102,36 @@ try {
         output: `function Component({ name = 'Test' }) { return <div>{name}</div>; } `,
       },
       {
+        code: `const Component = (props) => <div>{props.name}</div>; Component.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
+        output: null,
+      },
+      {
+        code: `const Component = ({ name, ...rest }) => <div>{name}</div>; Component.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
+        output: `const Component = ({ name = 'Test', ...rest }) => <div>{name}</div>; `,
+      },
+      {
+        code: `const Component = ({ name: displayName }) => <div>{displayName}</div>; Component.defaultProps = { name: 'Test' };`,
+        errors: [
+          {
+            message:
+              "'defaultProps' should not be used in 'Component' as they are no longer supported in React 19. Use default parameters instead.",
+          },
+        ],
+        output: `const Component = ({ name: displayName = 'Test' }) => <div>{displayName}</div>; `,
+      },
+      {
         code: `const Component = ({ name }) => <div>{name}</div>; const Component2 = Component; Component2.defaultProps = { name: 'Test' };`,
         errors: [
           {
@@ -59,6 +139,7 @@ try {
               "'defaultProps' should not be used in 'Component2' as they are no longer supported in React 19. Use default parameters instead.",
           },
         ],
+        output: `const Component = ({ name = 'Test' }) => <div>{name}</div>; const Component2 = Component; `,
       },
       {
         code: `import Component from './Component'; const Component2 = Component; Component2.defaultProps = { name: 'Test' };`,
@@ -96,6 +177,25 @@ try {
             message:
               "'prop-types' should not be imported in '<input>' as they are no longer supported in React 19.",
             type: "ImportDefaultSpecifier", // TODO: This is an ImportDeclaration in the code, determine why that type isn't returned
+          },
+          {
+            message:
+              "'propTypes' should not be used in 'Component' as they are no longer supported in React 19.",
+            type: "AssignmentExpression",
+          },
+        ],
+      },
+      {
+        code: `import PT from 'prop-types';
+
+        const Component = ({ name }) => <div>{name}</div>;
+
+        Component.propTypes = { name: PT.string };`,
+        errors: [
+          {
+            message:
+              "'prop-types' should not be imported in '<input>' as they are no longer supported in React 19.",
+            type: "ImportDefaultSpecifier",
           },
           {
             message:
@@ -159,19 +259,17 @@ try {
         }
         `,
         errors: [
-          // TODO: Fix and re-enable these tests. These first two tests aren't returning the correct result
-          // despite working when running ESLint normally.
-          // {
-          //   message:
-          //     "'contextTypes' uses a legacy contextTypes API that is no longer supported in React 19. Use 'contextType' instead.",
-          // },
-          // {
-          //   message:
-          //     "'childContextTypes' uses a legacy contextTypes API that is no longer supported in React 19. Use 'contextType' instead.",
-          // },
+          {
+            message:
+              "'childContextTypes' uses a legacy context API that is no longer supported in React 19. Use 'contextType' instead.",
+          },
           {
             message:
               "'getChildContext' uses a legacy context API that is no longer supported in React 19. Use 'React.createContext()' instead.",
+          },
+          {
+            message:
+              "'contextTypes' uses a legacy context API that is no longer supported in React 19. Use 'contextType' instead.",
           },
         ],
       },
@@ -207,11 +305,34 @@ try {
         code: `import { createFactory } from 'react'; const divFactory = createFactory('div');`,
         errors: [{ messageId: "noCreateFactory" }],
       },
+      {
+        code: `const createFactory = React.createFactory; const divFactory = createFactory('div');`,
+        errors: [{ messageId: "noCreateFactory" }],
+      },
     ],
   });
 
-  console.log("All tests passed!");
+  ruleTester.run("no-factories false positives", ruleNoFactories, {
+    valid: [
+      `
+      function notReact() {
+        return {
+          render: function() {
+            return value;
+          }
+        };
+      }
+      `,
+    ],
+    invalid: [],
+  });
+
+  console.log(`\n${stats.passed} passed, ${stats.failed} failed`);
+  if (stats.failed > 0) {
+    process.exitCode = 1;
+  }
 } catch (error) {
   console.error(error);
   console.error("One or more tests failed!");
+  process.exitCode = 1;
 }

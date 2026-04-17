@@ -21,22 +21,20 @@ module.exports = {
       ImportDeclaration(node) {
         if (node.source.value === "prop-types") {
           node.specifiers.forEach((specifier) => {
-            if (specifier.local && specifier.local.name === "PropTypes") {
-              const filename = context.filename ?? context.getFilename();
-              const name = filename
-                .split("/") // unix file paths
-                .pop()
-                .split("\\") // windows file paths
-                .pop()
-                .split(".")[0]; // remove extension
-              context.report({
-                node: specifier,
-                messageId: "propTypesImportDisallowed",
-                data: {
-                  name,
-                },
-              });
-            }
+            const filename = context.filename ?? context.getFilename();
+            const name = filename
+              .split("/") // unix file paths
+              .pop()
+              .split("\\") // windows file paths
+              .pop()
+              .split(".")[0]; // remove extension
+            context.report({
+              node: specifier,
+              messageId: "propTypesImportDisallowed",
+              data: {
+                name,
+              },
+            });
           });
         }
       },

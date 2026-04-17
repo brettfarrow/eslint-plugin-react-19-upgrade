@@ -1,3 +1,130 @@
+function findVariable(scope, name) {
+  let currentScope = scope;
+
+  while (currentScope) {
+    const variable = currentScope.variables.find((item) => item.name === name);
+
+    if (variable) {
+      return variable;
+    }
+
+    currentScope = currentScope.upper;
+  }
+
+  return null;
+}
+
+function isUppercaseName(name) {
+  return typeof name === "string" && /^[A-Z]/.test(name);
+}
+
+function getEnclosingFunction(node) {
+  let current = node.parent;
+
+  while (current) {
+    if (
+      current.type === "FunctionDeclaration" ||
+      current.type === "FunctionExpression" ||
+      current.type === "ArrowFunctionExpression"
+    ) {
+      return current;
+    }
+
+    current = current.parent;
+  }
+
+  return null;
+}
+
+function isLikelyReactModuleFactory(node) {
+  const enclosingFunction = getEnclosingFunction(node);
+
+  if (!enclosingFunction) {
+    return false;
+  }
+
+  if (enclosingFunction.id && isUppercaseName(enclosingFunction.id.name)) {
+    return true;
+  }
+
+  if (
+    enclosingFunction.parent &&
+    enclosingFunction.parent.type === "VariableDeclarator" &&
+    enclosingFunction.parent.id.type === "Identifier"
+  ) {
+    return isUppercaseName(enclosingFunction.parent.id.name);
+  }
+
+  return false;
+}
+
+function isReactCreateFactoryMemberExpression(node) {
+  return (
+    node &&
+    node.type === "MemberExpression" &&
+    !node.computed &&
+    node.object.type === "Identifier" &&
+    node.object.name === "React" &&
+    node.property.type === "Identifier" &&
+    node.property.name === "createFactory"
+  );
+}
+
+function resolvesToReactCreateFactory(context, node) {
+  if (node.callee.type !== "Identifier") {
+    return false;
+  }
+
+  const sourceCode = context.sourceCode ?? context.getSourceCode();
+  const scope = sourceCode.getScope
+    ? sourceCode.getScope(node)
+    : context.getScope();
+  const variable = findVariable(scope, node.callee.name);
+
+  if (!variable || variable.defs.length === 0) {
+    return false;
+  }
+
+  const definitionNode = variable.defs[0].node;
+
+  if (!definitionNode || definitionNode.type !== "VariableDeclarator") {
+    return false;
+  }
+
+  if (
+    definitionNode.id.type === "Identifier" &&
+    isReactCreateFactoryMemberExpression(definitionNode.init)
+  ) {
+    return true;
+  }
+
+  if (
+    definitionNode.id.type === "ObjectPattern" &&
+    definitionNode.init &&
+    definitionNode.init.type === "Identifier" &&
+    definitionNode.init.name === "React"
+  ) {
+    return definitionNode.id.properties.some((property) => {
+      if (property.type !== "Property" || property.computed) {
+        return false;
+      }
+
+      const keyName =
+        property.key.type === "Identifier" ? property.key.name : property.key.value;
+      const localName =
+        property.value.type === "Identifier"
+          ? property.value.name
+          : property.value.left && property.value.left.type === "Identifier"
+            ? property.value.left.name
+            : null;
+
+      return keyName === "createFactory" && localName === node.callee.name;
+    });
+  }
+
+  return false;
+}
+
 module.exports = {
   meta: {
     type: "problem",
@@ -17,15 +144,20 @@ module.exports = {
   },
   create(context) {
     return {
-      // Match function returns object with a render method
-      ReturnStatement: function (node) {
-        if (node.argument && node.argument.type === "ObjectExpression") {
+      ReturnStatement(node) {
+        if (
+          node.argument &&
+          node.argument.type === "ObjectExpression" &&
+          isLikelyReactModuleFactory(node)
+        ) {
           const hasRenderMethod = node.argument.properties.some(
-            (prop) =>
-              prop.type === "Property" &&
-              prop.key.name === "render" &&
-              prop.value.type === "FunctionExpression",
+            (property) =>
+              property.type === "Property" &&
+              property.key.type === "Identifier" &&
+              property.key.name === "render" &&
+              property.value.type === "FunctionExpression",
           );
+
           if (hasRenderMethod) {
             context.report({
               node,
@@ -34,7 +166,6 @@ module.exports = {
           }
         }
       },
-      // Match import or require of React.createFactory
       ImportDeclaration(node) {
         if (node.source.value === "react" && node.specifiers) {
           node.specifiers.forEach((spec) => {
@@ -47,13 +178,16 @@ module.exports = {
           });
         }
       },
-      "CallExpression[callee.object.name='React'][callee.property.name='createFactory']"(
-        node,
-      ) {
-        context.report({
-          node,
-          messageId: "noCreateFactory",
-        });
+      CallExpression(node) {
+        if (
+          isReactCreateFactoryMemberExpression(node.callee) ||
+          resolvesToReactCreateFactory(context, node)
+        ) {
+          context.report({
+            node,
+            messageId: "noCreateFactory",
+          });
+        }
       },
     };
   },
