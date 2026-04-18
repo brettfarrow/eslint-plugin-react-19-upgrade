@@ -15,14 +15,30 @@ module.exports = {
     hasSuggestions: true,
   },
   create(context) {
+    function report(node) {
+      context.report({ node, messageId: "noStringRefs" });
+    }
+
     return {
-      // JSX attribute inside a JSX element
-      "JSXAttribute[name.name='ref'][value.type='Literal']"(node) {
-        if (typeof node.value.value === "string") {
-          context.report({
-            node: node,
-            messageId: "noStringRefs",
-          });
+      "JSXAttribute[name.name='ref']"(node) {
+        const value = node.value;
+
+        if (!value) {
+          return;
+        }
+
+        if (value.type === "Literal" && typeof value.value === "string") {
+          report(node);
+          return;
+        }
+
+        if (
+          value.type === "JSXExpressionContainer" &&
+          value.expression &&
+          value.expression.type === "Literal" &&
+          typeof value.expression.value === "string"
+        ) {
+          report(node);
         }
       },
     };

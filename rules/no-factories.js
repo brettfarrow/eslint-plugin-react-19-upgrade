@@ -58,13 +58,30 @@ function isLikelyReactModuleFactory(node) {
   return false;
 }
 
+function isRequireReact(node) {
+  return (
+    node &&
+    node.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    node.callee.name === "require" &&
+    node.arguments.length === 1 &&
+    node.arguments[0].type === "Literal" &&
+    node.arguments[0].value === "react"
+  );
+}
+
+function isReactLikeObject(node) {
+  if (!node) return false;
+  if (node.type === "Identifier" && node.name === "React") return true;
+  return isRequireReact(node);
+}
+
 function isReactCreateFactoryMemberExpression(node) {
   return (
     node &&
     node.type === "MemberExpression" &&
     !node.computed &&
-    node.object.type === "Identifier" &&
-    node.object.name === "React" &&
+    isReactLikeObject(node.object) &&
     node.property.type === "Identifier" &&
     node.property.name === "createFactory"
   );
@@ -100,9 +117,7 @@ function resolvesToReactCreateFactory(context, node) {
 
   if (
     definitionNode.id.type === "ObjectPattern" &&
-    definitionNode.init &&
-    definitionNode.init.type === "Identifier" &&
-    definitionNode.init.name === "React"
+    isReactLikeObject(definitionNode.init)
   ) {
     return definitionNode.id.properties.some((property) => {
       if (property.type !== "Property" || property.computed) {
