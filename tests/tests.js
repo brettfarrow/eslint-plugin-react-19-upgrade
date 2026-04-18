@@ -8,6 +8,9 @@ const ruleNoPropTypes = require("../rules/no-prop-types");
 const ruleNoLegacyContext = require("../rules/no-legacy-context");
 const ruleNoStringRefs = require("../rules/no-string-refs");
 const ruleNoFactories = require("../rules/no-factories");
+const ruleNoLegacyReactDom = require("../rules/no-legacy-react-dom");
+const ruleNoLegacyReactDomServer = require("../rules/no-legacy-react-dom-server");
+const ruleNoLegacyTestUtilsAct = require("../rules/no-legacy-test-utils-act");
 
 // --- minimal describe/it harness (mirrors prior style, prints a tree) ---
 
@@ -72,13 +75,16 @@ describe("plugin api surface", () => {
     assert.ok(plugin.rules && typeof plugin.rules === "object", "plugin.rules exists");
   });
 
-  it("registers all five canonical rules", () => {
+  it("registers all eight canonical rules", () => {
     for (const name of [
       "no-default-props",
       "no-prop-types",
       "no-legacy-context",
       "no-string-refs",
       "no-factories",
+      "no-legacy-react-dom",
+      "no-legacy-react-dom-server",
+      "no-legacy-test-utils-act",
     ]) {
       assert.ok(plugin.rules[name], `rule ${name} is registered`);
     }
@@ -604,6 +610,246 @@ ruleTester.run("no-factories", ruleNoFactories, {
     {
       code: `const d = require('react').createFactory('div');`,
       errors: [{ messageId: "noCreateFactory" }],
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 7. no-legacy-react-dom
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-legacy-react-dom", ruleNoLegacyReactDom, {
+  valid: [
+    // surviving react-dom APIs
+    `import ReactDOM from 'react-dom'; ReactDOM.flushSync(() => {});`,
+    `import { createPortal } from 'react-dom'; createPortal(child, container);`,
+    // different module
+    `const other = require('not-react-dom'); other.render(x, y);`,
+    // locally-defined render, no react-dom import
+    `const render = () => {}; render();`,
+    // the correct R19 replacement code
+    `import { createRoot } from 'react-dom/client'; createRoot(el).render(<App />);`,
+    `import { hydrateRoot } from 'react-dom/client'; hydrateRoot(el, <App />);`,
+    // react-dom/client is a different module
+    `import ReactDOMClient from 'react-dom/client'; ReactDOMClient.createRoot(el);`,
+    // shadowed local is not the imported namespace
+    `import ReactDOM from 'react-dom'; function useLocal(ReactDOM) { ReactDOM.render(<App />, root); }`,
+  ],
+  invalid: [
+    {
+      code: `import ReactDOM from 'react-dom'; ReactDOM.render(<App />, root);`,
+      errors: [{ messageId: "noRender" }],
+    },
+    {
+      code: `import { render } from 'react-dom'; render(<App />, root);`,
+      errors: [{ messageId: "noRender" }],
+    },
+    // removed import should fail even if unused
+    {
+      code: `import { render } from 'react-dom';`,
+      errors: [{ messageId: "noRender" }],
+    },
+    // aliased named import
+    {
+      code: `import { render as r } from 'react-dom'; r(<App />, root);`,
+      errors: [{ messageId: "noRender" }],
+    },
+    // removed member reference should fail even if not called
+    {
+      code: `import ReactDOM from 'react-dom'; const legacyRender = ReactDOM.render;`,
+      errors: [{ messageId: "noRender" }],
+    },
+    {
+      code: `import ReactDOM from 'react-dom'; ReactDOM.hydrate(<App />, root);`,
+      errors: [{ messageId: "noHydrate" }],
+    },
+    {
+      code: `import { hydrate } from 'react-dom'; hydrate(<App />, root);`,
+      errors: [{ messageId: "noHydrate" }],
+    },
+    {
+      code: `import ReactDOM from 'react-dom'; ReactDOM.unmountComponentAtNode(root);`,
+      errors: [{ messageId: "noUnmountComponentAtNode" }],
+    },
+    {
+      code: `const { unmountComponentAtNode } = require('react-dom'); unmountComponentAtNode(root);`,
+      errors: [{ messageId: "noUnmountComponentAtNode" }],
+    },
+    // destructured require should fail even if unused
+    {
+      code: `const { render } = require('react-dom');`,
+      errors: [{ messageId: "noRender" }],
+    },
+    {
+      code: `import ReactDOM from 'react-dom'; ReactDOM.findDOMNode(instance);`,
+      errors: [{ messageId: "noFindDOMNode" }],
+    },
+    {
+      code: `const { findDOMNode } = require('react-dom'); findDOMNode(instance);`,
+      errors: [{ messageId: "noFindDOMNode" }],
+    },
+    // renamed destructure from require
+    {
+      code: `const { render: r } = require('react-dom'); r(<App />, root);`,
+      errors: [{ messageId: "noRender" }],
+    },
+    // namespace import
+    {
+      code: `import * as RD from 'react-dom'; RD.findDOMNode(i);`,
+      errors: [{ messageId: "noFindDOMNode" }],
+    },
+    // inline require
+    {
+      code: `require('react-dom').render(<App />, root);`,
+      errors: [{ messageId: "noRender" }],
+    },
+    // CommonJS namespace var
+    {
+      code: `const ReactDOM = require('react-dom'); ReactDOM.hydrate(<App />, root);`,
+      errors: [{ messageId: "noHydrate" }],
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 8. no-legacy-react-dom-server
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-legacy-react-dom-server", ruleNoLegacyReactDomServer, {
+  valid: [
+    // surviving exports
+    `import { renderToString } from 'react-dom/server'; renderToString(<App />);`,
+    `import { renderToStaticMarkup } from 'react-dom/server'; renderToStaticMarkup(<App />);`,
+    `import { renderToPipeableStream } from 'react-dom/server';`,
+    `import { renderToReadableStream } from 'react-dom/server';`,
+    `import Server from 'react-dom/server'; Server.renderToString(<App />);`,
+    // different module
+    `import { renderToNodeStream } from 'not-react-dom-server';`,
+    `const { renderToNodeStream } = require('something-else');`,
+    // shadowed local is not the imported namespace
+    `import Server from 'react-dom/server'; function useLocal(Server) { Server.renderToNodeStream(<App />); }`,
+  ],
+  invalid: [
+    {
+      code: `import { renderToNodeStream } from 'react-dom/server'; renderToNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    {
+      code: `import { renderToStaticNodeStream } from 'react-dom/server';`,
+      errors: [{ messageId: "noRenderToStaticNodeStream" }],
+    },
+    // mixed import: allowlist proves surviving export is ignored
+    {
+      code: `import { renderToString, renderToNodeStream } from 'react-dom/server';`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    // namespace access
+    {
+      code: `import Server from 'react-dom/server'; Server.renderToNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    // removed member reference should fail even if not called
+    {
+      code: `import Server from 'react-dom/server'; const legacy = Server.renderToNodeStream;`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    {
+      code: `import Server from 'react-dom/server'; Server.renderToStaticNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToStaticNodeStream" }],
+    },
+    // namespace * as
+    {
+      code: `import * as Server from 'react-dom/server'; Server.renderToNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    // destructure from require
+    {
+      code: `const { renderToNodeStream } = require('react-dom/server');`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    // CommonJS namespace var
+    {
+      code: `const Server = require('react-dom/server'); Server.renderToStaticNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToStaticNodeStream" }],
+    },
+    // inline require
+    {
+      code: `require('react-dom/server').renderToNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 9. no-legacy-test-utils-act
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-legacy-test-utils-act", ruleNoLegacyTestUtilsAct, {
+  valid: [
+    // correct R19 import
+    `import { act } from 'react'; act(() => {});`,
+    // unrelated test-utils export still legal
+    `import { Simulate } from 'react-dom/test-utils'; Simulate.click(node);`,
+    `const TestUtils = require('react-dom/test-utils'); TestUtils.Simulate.click(node);`,
+    // different module
+    `import TestUtils from 'other/test-utils'; TestUtils.act(() => {});`,
+    // local identifier coincidentally named act, no test-utils binding
+    `const act = (fn) => fn(); act(() => {});`,
+    // shadowed local is not the imported namespace
+    `import TestUtils from 'react-dom/test-utils'; function useLocal(TestUtils) { TestUtils.act(() => {}); }`,
+  ],
+  invalid: [
+    // simple named import — fixable
+    {
+      code: `import { act } from 'react-dom/test-utils'; act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react'; act(() => {});`,
+    },
+    // aliased named import — alias preserved
+    {
+      code: `import { act as a } from 'react-dom/test-utils'; a(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act as a } from 'react'; a(() => {});`,
+    },
+    // mixed — split into two imports
+    {
+      code: `import { act, Simulate } from 'react-dom/test-utils';`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react';\nimport { Simulate } from 'react-dom/test-utils';`,
+    },
+    // default + named — default stays, act moves
+    {
+      code: `import TestUtils, { act } from 'react-dom/test-utils'; TestUtils.Simulate.click(node);`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react';\nimport TestUtils from 'react-dom/test-utils'; TestUtils.Simulate.click(node);`,
+    },
+    // namespace + act via member access — reported, not fixed
+    {
+      code: `import TestUtils from 'react-dom/test-utils'; TestUtils.act(() => {});`,
+      errors: [
+        { messageId: "noTestUtilsAct" },
+      ],
+    },
+    {
+      code: `import * as TestUtils from 'react-dom/test-utils'; TestUtils.act(() => {});`,
+      errors: [
+        { messageId: "noTestUtilsAct" },
+      ],
+    },
+    // CommonJS destructure — reported, not fixed
+    {
+      code: `const { act } = require('react-dom/test-utils'); act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // CommonJS namespace var + member access
+    {
+      code: `const TestUtils = require('react-dom/test-utils'); TestUtils.act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // inline require
+    {
+      code: `require('react-dom/test-utils').act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
     },
   ],
 });
