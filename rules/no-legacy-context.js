@@ -17,35 +17,38 @@ module.exports = {
     hasSuggestions: true,
   },
   create(context) {
-    return {
-      "ClassDeclaration:exit"(node) {
-        node.body.body.forEach((member) => {
+    function checkClassBody(node) {
+      node.body.body.forEach((member) => {
+        if (
+          member.type === "ClassProperty" ||
+          member.type === "PropertyDefinition"
+        ) {
           if (
-            member.type === "ClassProperty" ||
-            member.type === "PropertyDefinition"
-          ) {
-            if (
-              member.key.name === "childContextTypes" ||
-              member.key.name === "contextTypes"
-            ) {
-              context.report({
-                node: member,
-                message: `'${member.key.name}' uses a legacy context API that is no longer supported in React 19. Use 'contextType' instead.`,
-              });
-            }
-          }
-          if (
-            member.type === "MethodDefinition" &&
-            member.key.name === "getChildContext"
+            member.key.name === "childContextTypes" ||
+            member.key.name === "contextTypes"
           ) {
             context.report({
               node: member,
-              message:
-                "'getChildContext' uses a legacy context API that is no longer supported in React 19. Use 'React.createContext()' instead.",
+              message: `'${member.key.name}' uses a legacy context API that is no longer supported in React 19. Use 'contextType' instead.`,
             });
           }
-        });
-      },
+        }
+        if (
+          member.type === "MethodDefinition" &&
+          member.key.name === "getChildContext"
+        ) {
+          context.report({
+            node: member,
+            message:
+              "'getChildContext' uses a legacy context API that is no longer supported in React 19. Use 'React.createContext()' instead.",
+          });
+        }
+      });
+    }
+
+    return {
+      "ClassDeclaration:exit": checkClassBody,
+      "ClassExpression:exit": checkClassBody,
     };
   },
 };
