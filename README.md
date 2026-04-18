@@ -1,5 +1,10 @@
 # eslint-plugin-react-19-upgrade
 
+[![npm version](https://img.shields.io/npm/v/eslint-plugin-react-19-upgrade.svg)](https://www.npmjs.com/package/eslint-plugin-react-19-upgrade)
+[![npm downloads](https://img.shields.io/npm/dm/eslint-plugin-react-19-upgrade.svg)](https://www.npmjs.com/package/eslint-plugin-react-19-upgrade)
+[![license](https://img.shields.io/npm/l/eslint-plugin-react-19-upgrade.svg)](https://github.com/brettfarrow/eslint-plugin-react-19-upgrade/blob/main/LICENSE)
+[![CI](https://github.com/brettfarrow/eslint-plugin-react-19-upgrade/actions/workflows/ci.yml/badge.svg)](https://github.com/brettfarrow/eslint-plugin-react-19-upgrade/actions/workflows/ci.yml)
+
 An ESLint plugin to identify and fix breaking changes when upgrading React 18 to React 19
 
 ## Installation
