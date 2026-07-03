@@ -9,6 +9,9 @@ module.exports = {
     "no-legacy-react-dom": require("./rules/no-legacy-react-dom"),
     "no-legacy-react-dom-server": require("./rules/no-legacy-react-dom-server"),
     "no-legacy-test-utils-act": require("./rules/no-legacy-test-utils-act"),
+    "no-legacy-react-is": require("./rules/no-legacy-react-is"),
+    "no-shallow-renderer": require("./rules/no-shallow-renderer"),
+    "no-implicit-ref-callback-return": require("./rules/no-implicit-ref-callback-return"),
     // equivalent but without the extra dash
     "no-defaultprops": require("./rules/no-default-props"),
     "no-proptypes": require("./rules/no-prop-types"),

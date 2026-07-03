@@ -2,22 +2,6 @@
 
 const SOURCE = "react-dom/test-utils";
 
-function findVariable(scope, name) {
-  let currentScope = scope;
-
-  while (currentScope) {
-    const variable = currentScope.variables.find((item) => item.name === name);
-
-    if (variable) {
-      return variable;
-    }
-
-    currentScope = currentScope.upper;
-  }
-
-  return null;
-}
-
 function isRequireTestUtils(node) {
   return (
     node &&
@@ -30,12 +14,17 @@ function isRequireTestUtils(node) {
   );
 }
 
+function importedName(spec) {
+  if (!spec.imported) return null;
+  return spec.imported.name ?? spec.imported.value;
+}
+
 function specifierToText(spec) {
   if (spec.type !== "ImportSpecifier") return null;
-  if (spec.local.name === spec.imported.name) {
-    return spec.imported.name;
+  if (spec.local.name === importedName(spec)) {
+    return importedName(spec);
   }
-  return `${spec.imported.name} as ${spec.local.name}`;
+  return `${importedName(spec)} as ${spec.local.name}`;
 }
 
 function rebuildImport(specs, source, quote) {
@@ -67,12 +56,16 @@ module.exports = {
     type: "problem",
     docs: {
       description:
-        "Disallow importing 'act' from 'react-dom/test-utils'; import it from 'react' instead",
+        "Disallow importing from 'react-dom/test-utils' (removed in React 19); import 'act' from 'react' and use '@testing-library/react' for other utilities",
       url: "https://react.dev/blog/2024/04/25/react-19-upgrade-guide#new-deprecations",
     },
     messages: {
       noTestUtilsAct:
         "'act' must be imported from 'react' in React 19, not 'react-dom/test-utils'.",
+      noTestUtilsRemoved:
+        "'{{name}}' from 'react-dom/test-utils' is removed in React 19. Use '@testing-library/react' or another modern testing utility instead.",
+      noTestUtilsModule:
+        "'react-dom/test-utils' is removed in React 19. Import 'act' from 'react'; use '@testing-library/react' for other utilities.",
     },
     fixable: "code",
     schema: [],
@@ -80,47 +73,31 @@ module.exports = {
     hasSuggestions: true,
   },
   create(context) {
-    const sourceCode = context.sourceCode ?? context.getSourceCode();
-    const testUtilsNamespaceVariables = new Set();
-
-    function trackNamespace(node) {
-      const [variable] = sourceCode.getDeclaredVariables(node);
-
-      if (variable) {
-        testUtilsNamespaceVariables.add(variable);
-      }
-    }
-
-    function isTrackedNamespaceIdentifier(node) {
-      const scope = sourceCode.getScope
-        ? sourceCode.getScope(node)
-        : context.getScope();
-      const variable = findVariable(scope, node.name);
-
-      return Boolean(variable && testUtilsNamespaceVariables.has(variable));
-    }
-
     return {
       ImportDeclaration(node) {
         if (node.source.value !== SOURCE) return;
+
+        if (node.specifiers.length === 0) {
+          context.report({ node, messageId: "noTestUtilsModule" });
+          return;
+        }
 
         const actSpecs = [];
         const otherSpecs = [];
 
         for (const spec of node.specifiers) {
-          if (
-            spec.type === "ImportSpecifier" &&
-            spec.imported &&
-            spec.imported.name === "act"
-          ) {
+          if (spec.type === "ImportSpecifier" && importedName(spec) === "act") {
             actSpecs.push(spec);
           } else {
             otherSpecs.push(spec);
-            if (
-              spec.type === "ImportDefaultSpecifier" ||
-              spec.type === "ImportNamespaceSpecifier"
-            ) {
-              trackNamespace(spec);
+            if (spec.type === "ImportSpecifier") {
+              context.report({
+                node: spec,
+                messageId: "noTestUtilsRemoved",
+                data: { name: importedName(spec) },
+              });
+            } else {
+              context.report({ node: spec, messageId: "noTestUtilsModule" });
             }
           }
         }
@@ -147,18 +124,14 @@ module.exports = {
       },
 
       VariableDeclarator(node) {
-        if (
-          node.id.type === "Identifier" &&
-          isRequireTestUtils(node.init)
-        ) {
-          trackNamespace(node);
+        if (!isRequireTestUtils(node.init)) return;
+
+        if (node.id.type === "Identifier") {
+          context.report({ node, messageId: "noTestUtilsModule" });
           return;
         }
 
-        if (
-          node.id.type === "ObjectPattern" &&
-          isRequireTestUtils(node.init)
-        ) {
+        if (node.id.type === "ObjectPattern") {
           for (const property of node.id.properties) {
             if (property.type !== "Property" || property.computed) continue;
 
@@ -172,30 +145,32 @@ module.exports = {
                 node: property,
                 messageId: "noTestUtilsAct",
               });
+            } else {
+              context.report({
+                node: property,
+                messageId: "noTestUtilsRemoved",
+                data: { name: keyName },
+              });
             }
           }
         }
       },
 
       MemberExpression(node) {
-        if (
-          node.computed ||
-          node.property.type !== "Identifier" ||
-          node.property.name !== "act"
-        ) {
+        if (node.computed || node.property.type !== "Identifier") {
           return;
         }
 
-        if (
-          node.object.type === "Identifier" &&
-          isTrackedNamespaceIdentifier(node.object)
-        ) {
-          context.report({ node, messageId: "noTestUtilsAct" });
-          return;
-        }
+        if (!isRequireTestUtils(node.object)) return;
 
-        if (isRequireTestUtils(node.object)) {
+        if (node.property.name === "act") {
           context.report({ node, messageId: "noTestUtilsAct" });
+        } else {
+          context.report({
+            node,
+            messageId: "noTestUtilsRemoved",
+            data: { name: node.property.name },
+          });
         }
       },
     };

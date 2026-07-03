@@ -1,17 +1,10 @@
-// rules/no-legacy-react-dom.js
+// rules/no-legacy-react-is.js
 
-const SOURCE = "react-dom";
+const SOURCE = "react-is";
 
 const REMOVED_APIS = {
-  render: "noRender",
-  hydrate: "noHydrate",
-  unmountComponentAtNode: "noUnmountComponentAtNode",
-  findDOMNode: "noFindDOMNode",
-  unstable_flushControlled: "noUnstableFlushControlled",
-  unstable_createEventHandle: "noUnstableCreateEventHandle",
-  unstable_renderSubtreeIntoContainer: "noUnstableRenderSubtreeIntoContainer",
-  renderSubtreeIntoContainer: "noRenderSubtreeIntoContainer",
-  unstable_runWithPriority: "noUnstableRunWithPriority",
+  isConcurrentMode: "noIsConcurrentMode",
+  isAsyncMode: "noIsAsyncMode",
 };
 
 function findVariable(scope, name) {
@@ -30,7 +23,7 @@ function findVariable(scope, name) {
   return null;
 }
 
-function isRequireReactDom(node) {
+function isRequireReactIs(node) {
   return (
     node &&
     node.type === "CallExpression" &&
@@ -47,31 +40,17 @@ module.exports = {
     type: "problem",
     docs: {
       description:
-        "Disallow react-dom APIs removed in React 19 (render, hydrate, unmountComponentAtNode, findDOMNode, and the removed unstable_* APIs)",
+        "Disallow 'isConcurrentMode' and 'isAsyncMode' from 'react-is' (removed in React 19)",
       url: "https://react.dev/blog/2024/04/25/react-19-upgrade-guide#new-deprecations",
     },
     messages: {
-      noRender:
-        "'ReactDOM.render' is removed in React 19. Import 'createRoot' from 'react-dom/client' and call 'createRoot(container).render(element)' instead.",
-      noHydrate:
-        "'ReactDOM.hydrate' is removed in React 19. Import 'hydrateRoot' from 'react-dom/client' and call 'hydrateRoot(container, element)' instead.",
-      noUnmountComponentAtNode:
-        "'ReactDOM.unmountComponentAtNode' is removed in React 19. Hold on to the root returned by 'createRoot' and call 'root.unmount()' instead.",
-      noFindDOMNode:
-        "'ReactDOM.findDOMNode' is removed in React 19. Attach a ref to the DOM node you need instead.",
-      noUnstableFlushControlled:
-        "'ReactDOM.unstable_flushControlled' is removed in React 19 without a replacement.",
-      noUnstableCreateEventHandle:
-        "'ReactDOM.unstable_createEventHandle' is removed in React 19 without a replacement.",
-      noUnstableRenderSubtreeIntoContainer:
-        "'ReactDOM.unstable_renderSubtreeIntoContainer' is removed in React 19 without a replacement. Consider 'createPortal' from 'react-dom'.",
-      noRenderSubtreeIntoContainer:
-        "'ReactDOM.renderSubtreeIntoContainer' is removed in React 19 without a replacement. Consider 'createPortal' from 'react-dom'.",
-      noUnstableRunWithPriority:
-        "'ReactDOM.unstable_runWithPriority' is removed in React 19 without a replacement.",
+      noIsConcurrentMode:
+        "'isConcurrentMode' from 'react-is' is removed in React 19 without a replacement.",
+      noIsAsyncMode:
+        "'isAsyncMode' from 'react-is' is removed in React 19 without a replacement.",
     },
     schema: [],
-    ruleId: "no-legacy-react-dom",
+    ruleId: "no-legacy-react-is",
     hasSuggestions: true,
   },
   create(context) {
@@ -123,7 +102,7 @@ module.exports = {
       },
 
       VariableDeclarator(node) {
-        if (!isRequireReactDom(node.init)) return;
+        if (!isRequireReactIs(node.init)) return;
 
         if (node.id.type === "Identifier") {
           trackNamespace(node);
@@ -161,7 +140,7 @@ module.exports = {
           return;
         }
 
-        if (isRequireReactDom(node.object)) {
+        if (isRequireReactIs(node.object)) {
           reportApi(node, apiName);
         }
       },
