@@ -11,6 +11,10 @@ const ruleNoFactories = require("../rules/no-factories");
 const ruleNoLegacyReactDom = require("../rules/no-legacy-react-dom");
 const ruleNoLegacyReactDomServer = require("../rules/no-legacy-react-dom-server");
 const ruleNoLegacyTestUtilsAct = require("../rules/no-legacy-test-utils-act");
+const ruleNoLegacyTestUtils = require("../rules/no-legacy-test-utils");
+const ruleNoLegacyReactIs = require("../rules/no-legacy-react-is");
+const ruleNoShallowRenderer = require("../rules/no-shallow-renderer");
+const ruleNoImplicitRefCallbackReturn = require("../rules/no-implicit-ref-callback-return");
 
 // --- minimal describe/it harness (mirrors prior style, prints a tree) ---
 
@@ -75,7 +79,7 @@ describe("plugin api surface", () => {
     assert.ok(plugin.rules && typeof plugin.rules === "object", "plugin.rules exists");
   });
 
-  it("registers all eight canonical rules", () => {
+  it("registers all twelve canonical rules", () => {
     for (const name of [
       "no-default-props",
       "no-prop-types",
@@ -85,6 +89,10 @@ describe("plugin api surface", () => {
       "no-legacy-react-dom",
       "no-legacy-react-dom-server",
       "no-legacy-test-utils-act",
+      "no-legacy-test-utils",
+      "no-legacy-react-is",
+      "no-shallow-renderer",
+      "no-implicit-ref-callback-return",
     ]) {
       assert.ok(plugin.rules[name], `rule ${name} is registered`);
     }
@@ -708,6 +716,36 @@ ruleTester.run("no-legacy-react-dom", ruleNoLegacyReactDom, {
       code: `const ReactDOM = require('react-dom'); ReactDOM.hydrate(<App />, root);`,
       errors: [{ messageId: "noHydrate" }],
     },
+    // removed unstable_* APIs
+    {
+      code: `import ReactDOM from 'react-dom'; ReactDOM.unstable_flushControlled(fn);`,
+      errors: [{ messageId: "noUnstableFlushControlled" }],
+    },
+    // removed unstable import should fail even if unused
+    {
+      code: `import { unstable_createEventHandle } from 'react-dom';`,
+      errors: [{ messageId: "noUnstableCreateEventHandle" }],
+    },
+    // aliased named import
+    {
+      code: `import { unstable_flushControlled as fc } from 'react-dom'; fc(fn);`,
+      errors: [{ messageId: "noUnstableFlushControlled" }],
+    },
+    // destructure from require
+    {
+      code: `const { unstable_renderSubtreeIntoContainer } = require('react-dom');`,
+      errors: [{ messageId: "noUnstableRenderSubtreeIntoContainer" }],
+    },
+    // namespace import
+    {
+      code: `import * as RD from 'react-dom'; RD.renderSubtreeIntoContainer(parent, el, container);`,
+      errors: [{ messageId: "noRenderSubtreeIntoContainer" }],
+    },
+    // inline require
+    {
+      code: `require('react-dom').unstable_runWithPriority(priority, fn);`,
+      errors: [{ messageId: "noUnstableRunWithPriority" }],
+    },
   ],
 });
 
@@ -788,7 +826,7 @@ ruleTester.run("no-legacy-test-utils-act", ruleNoLegacyTestUtilsAct, {
   valid: [
     // correct R19 import
     `import { act } from 'react'; act(() => {});`,
-    // unrelated test-utils export still legal
+    // unrelated test-utils export still legal (narrow rule; see no-legacy-test-utils)
     `import { Simulate } from 'react-dom/test-utils'; Simulate.click(node);`,
     `const TestUtils = require('react-dom/test-utils'); TestUtils.Simulate.click(node);`,
     // different module
@@ -853,6 +891,327 @@ ruleTester.run("no-legacy-test-utils-act", ruleNoLegacyTestUtilsAct, {
     },
   ],
 });
+
+// -----------------------------------------------------------------------
+// 10. no-legacy-test-utils
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-legacy-test-utils", ruleNoLegacyTestUtils, {
+  valid: [
+    // correct R19 import
+    `import { act } from 'react'; act(() => {});`,
+    // the modern replacement for the removed utilities
+    `import { render } from '@testing-library/react'; render(<App />);`,
+    // different module
+    `import TestUtils from 'other/test-utils'; TestUtils.act(() => {});`,
+    `const TestUtils = require('other/test-utils'); TestUtils.Simulate.click(node);`,
+    // local identifier coincidentally named act, no test-utils binding
+    `const act = (fn) => fn(); act(() => {});`,
+  ],
+  invalid: [
+    // simple named import — fixable
+    {
+      code: `import { act } from 'react-dom/test-utils'; act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react'; act(() => {});`,
+    },
+    // aliased named import — alias preserved
+    {
+      code: `import { act as a } from 'react-dom/test-utils'; a(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act as a } from 'react'; a(() => {});`,
+    },
+    // mixed — act split out; the removed utility flagged and left for a later pass
+    {
+      code: `import { act, Simulate } from 'react-dom/test-utils';`,
+      errors: [
+        { messageId: "noTestUtilsAct" },
+        { messageId: "noTestUtilsRemoved", data: { name: "Simulate" } },
+      ],
+      output: `import { act } from 'react';\nimport { Simulate } from 'react-dom/test-utils';`,
+    },
+    // default + named — default flagged as removed module, act moves
+    {
+      code: `import TestUtils, { act } from 'react-dom/test-utils'; TestUtils.Simulate.click(node);`,
+      errors: [
+        { messageId: "noTestUtilsModule" },
+        { messageId: "noTestUtilsAct" },
+      ],
+      output: `import { act } from 'react';\nimport TestUtils from 'react-dom/test-utils'; TestUtils.Simulate.click(node);`,
+    },
+    // removed utility as named import
+    {
+      code: `import { Simulate } from 'react-dom/test-utils'; Simulate.click(node);`,
+      errors: [{ messageId: "noTestUtilsRemoved", data: { name: "Simulate" } }],
+    },
+    // removed utility, aliased
+    {
+      code: `import { renderIntoDocument as rid } from 'react-dom/test-utils';`,
+      errors: [
+        { messageId: "noTestUtilsRemoved", data: { name: "renderIntoDocument" } },
+      ],
+    },
+    // default / namespace imports — the whole module is gone
+    {
+      code: `import TestUtils from 'react-dom/test-utils'; TestUtils.act(() => {});`,
+      errors: [{ messageId: "noTestUtilsModule" }],
+    },
+    {
+      code: `import * as TestUtils from 'react-dom/test-utils'; TestUtils.act(() => {});`,
+      errors: [{ messageId: "noTestUtilsModule" }],
+    },
+    // shadowing doesn't rescue the import itself
+    {
+      code: `import TestUtils from 'react-dom/test-utils'; function useLocal(TestUtils) { TestUtils.act(() => {}); }`,
+      errors: [{ messageId: "noTestUtilsModule" }],
+    },
+    // side-effect import
+    {
+      code: `import 'react-dom/test-utils';`,
+      errors: [{ messageId: "noTestUtilsModule" }],
+    },
+    // CommonJS destructure — reported, not fixed
+    {
+      code: `const { act } = require('react-dom/test-utils'); act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // CommonJS destructure of removed utilities
+    {
+      code: `const { Simulate, mockComponent } = require('react-dom/test-utils');`,
+      errors: [
+        { messageId: "noTestUtilsRemoved", data: { name: "Simulate" } },
+        { messageId: "noTestUtilsRemoved", data: { name: "mockComponent" } },
+      ],
+    },
+    // CommonJS namespace var
+    {
+      code: `const TestUtils = require('react-dom/test-utils'); TestUtils.act(() => {});`,
+      errors: [{ messageId: "noTestUtilsModule" }],
+    },
+    // inline require
+    {
+      code: `require('react-dom/test-utils').act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    {
+      code: `require('react-dom/test-utils').renderIntoDocument(<App />);`,
+      errors: [
+        { messageId: "noTestUtilsRemoved", data: { name: "renderIntoDocument" } },
+      ],
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 11. no-legacy-react-is
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-legacy-react-is", ruleNoLegacyReactIs, {
+  valid: [
+    // surviving react-is APIs
+    `import { isElement } from 'react-is'; isElement(x);`,
+    `import * as ReactIs from 'react-is'; ReactIs.isFragment(x);`,
+    `const { isValidElementType } = require('react-is'); isValidElementType(x);`,
+    // same names from a different module
+    `import { isAsyncMode } from 'not-react-is'; isAsyncMode(x);`,
+    // local identifier coincidence, no react-is binding
+    `const isConcurrentMode = () => false; isConcurrentMode(x);`,
+    // shadowed local is not the imported namespace
+    `import ReactIs from 'react-is'; function useLocal(ReactIs) { ReactIs.isAsyncMode(x); }`,
+  ],
+  invalid: [
+    {
+      code: `import { isConcurrentMode } from 'react-is'; isConcurrentMode(x);`,
+      errors: [{ messageId: "noIsConcurrentMode" }],
+    },
+    // removed import should fail even if unused
+    {
+      code: `import { isAsyncMode } from 'react-is';`,
+      errors: [{ messageId: "noIsAsyncMode" }],
+    },
+    // aliased named import
+    {
+      code: `import { isAsyncMode as iam } from 'react-is'; iam(x);`,
+      errors: [{ messageId: "noIsAsyncMode" }],
+    },
+    // default import member access
+    {
+      code: `import ReactIs from 'react-is'; ReactIs.isConcurrentMode(x);`,
+      errors: [{ messageId: "noIsConcurrentMode" }],
+    },
+    // namespace import member access
+    {
+      code: `import * as ReactIs from 'react-is'; ReactIs.isAsyncMode(x);`,
+      errors: [{ messageId: "noIsAsyncMode" }],
+    },
+    // removed member reference should fail even if not called
+    {
+      code: `import ReactIs from 'react-is'; const check = ReactIs.isConcurrentMode;`,
+      errors: [{ messageId: "noIsConcurrentMode" }],
+    },
+    // destructure from require
+    {
+      code: `const { isConcurrentMode } = require('react-is'); isConcurrentMode(x);`,
+      errors: [{ messageId: "noIsConcurrentMode" }],
+    },
+    // renamed destructure from require
+    {
+      code: `const { isAsyncMode: a } = require('react-is'); a(x);`,
+      errors: [{ messageId: "noIsAsyncMode" }],
+    },
+    // CommonJS namespace var
+    {
+      code: `const ReactIs = require('react-is'); ReactIs.isAsyncMode(x);`,
+      errors: [{ messageId: "noIsAsyncMode" }],
+    },
+    // inline require
+    {
+      code: `require('react-is').isConcurrentMode(x);`,
+      errors: [{ messageId: "noIsConcurrentMode" }],
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 12. no-shallow-renderer
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-shallow-renderer", ruleNoShallowRenderer, {
+  valid: [
+    // the correct R19 replacement
+    `import ShallowRenderer from 'react-shallow-renderer';`,
+    `const ShallowRenderer = require('react-shallow-renderer');`,
+    // the base package is a separate (deprecated, not removed) concern
+    `import TestRenderer from 'react-test-renderer';`,
+    // near-miss source string must not match
+    `import Shallow from 'react-test-renderer/shallow-thing';`,
+  ],
+  invalid: [
+    {
+      code: `import ShallowRenderer from 'react-test-renderer/shallow';`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `import ShallowRenderer from 'react-shallow-renderer';`,
+    },
+    // namespace import preserved
+    {
+      code: `import * as SR from 'react-test-renderer/shallow';`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `import * as SR from 'react-shallow-renderer';`,
+    },
+    // double quotes preserved
+    {
+      code: `import SR from "react-test-renderer/shallow";`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `import SR from "react-shallow-renderer";`,
+    },
+    // side-effect import
+    {
+      code: `import 'react-test-renderer/shallow';`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `import 'react-shallow-renderer';`,
+    },
+    // CommonJS require
+    {
+      code: `const ShallowRenderer = require('react-test-renderer/shallow');`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `const ShallowRenderer = require('react-shallow-renderer');`,
+    },
+    // destructured require
+    {
+      code: `const { createRenderer } = require('react-test-renderer/shallow');`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `const { createRenderer } = require('react-shallow-renderer');`,
+    },
+    // inline require
+    {
+      code: `new (require('react-test-renderer/shallow'))();`,
+      errors: [{ messageId: "noShallowRenderer" }],
+      output: `new (require('react-shallow-renderer'))();`,
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 13. no-implicit-ref-callback-return
+// -----------------------------------------------------------------------
+
+ruleTester.run(
+  "no-implicit-ref-callback-return",
+  ruleNoImplicitRefCallbackReturn,
+  {
+    valid: [
+      // block body
+      `const view = <div ref={el => { this.el = el; }} />;`,
+      // empty block body
+      `const view = <div ref={el => {}} />;`,
+      // explicit undefined
+      `const view = <div ref={el => undefined} />;`,
+      // void operator
+      `const view = <div ref={el => void (this.el = el)} />;`,
+      // ref object
+      `const view = <div ref={myRef} />;`,
+      // implicit return is fine on non-ref attributes
+      `const view = <div onClick={e => (count = e)} />;`,
+      // function expressions are out of scope
+      `const view = <div ref={function (el) { self.el = el; }} />;`,
+      // explicit returns in block bodies are out of scope (intentional cleanup)
+      `const view = <div ref={el => { attach(el); return () => detach(el); }} />;`,
+    ],
+    invalid: [
+      // parenthesized assignment — parens removed by the fix
+      {
+        code: `const view = <div ref={el => (this.el = el)} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: `const view = <div ref={el => { this.el = el; }} />;`,
+      },
+      // bare assignment
+      {
+        code: `const view = <div ref={el => this.el = el} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: `const view = <div ref={el => { this.el = el; }} />;`,
+      },
+      // call expression
+      {
+        code: `const view = <li ref={el => list.push(el)} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: `const view = <li ref={el => { list.push(el); }} />;`,
+      },
+      // conditional expression
+      {
+        code: `const view = <div ref={el => el ? attach(el) : detach()} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: `const view = <div ref={el => { el ? attach(el) : detach(); }} />;`,
+      },
+      // sequence expression
+      {
+        code: `const view = <div ref={el => (map.set(id, el), el.focus())} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: `const view = <div ref={el => { map.set(id, el), el.focus(); }} />;`,
+      },
+      // only undefined/void are exempt — null still flagged
+      {
+        code: `const view = <div ref={el => null} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: `const view = <div ref={el => { null; }} />;`,
+      },
+      // comments adjacent to the body suppress the fix
+      {
+        code: `const view = <div ref={el => /* keep */ (this.el = el)} />;`,
+        errors: [{ messageId: "noImplicitRefCallbackReturn" }],
+        output: null,
+      },
+      // multiple refs fixed in one pass
+      {
+        code: `const view = <div><span ref={el => (a = el)} /><em ref={el => (b = el)} /></div>;`,
+        errors: [
+          { messageId: "noImplicitRefCallbackReturn" },
+          { messageId: "noImplicitRefCallbackReturn" },
+        ],
+        output: `const view = <div><span ref={el => { a = el; }} /><em ref={el => { b = el; }} /></div>;`,
+      },
+    ],
+  },
+);
 
 // -----------------------------------------------------------------------
 // summary
