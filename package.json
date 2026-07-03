@@ -13,6 +13,12 @@
   },
   "homepage": "https://github.com/brettfarrow/eslint-plugin-react-19-upgrade",
   "license": "MIT",
+  "files": [
+    "index.js",
+    "rules/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node tests/tests.js"
   },
