@@ -11,6 +11,7 @@ const ruleNoFactories = require("../rules/no-factories");
 const ruleNoLegacyReactDom = require("../rules/no-legacy-react-dom");
 const ruleNoLegacyReactDomServer = require("../rules/no-legacy-react-dom-server");
 const ruleNoLegacyTestUtilsAct = require("../rules/no-legacy-test-utils-act");
+const ruleNoLegacyTestUtils = require("../rules/no-legacy-test-utils");
 const ruleNoLegacyReactIs = require("../rules/no-legacy-react-is");
 const ruleNoShallowRenderer = require("../rules/no-shallow-renderer");
 const ruleNoImplicitRefCallbackReturn = require("../rules/no-implicit-ref-callback-return");
@@ -78,7 +79,7 @@ describe("plugin api surface", () => {
     assert.ok(plugin.rules && typeof plugin.rules === "object", "plugin.rules exists");
   });
 
-  it("registers all eleven canonical rules", () => {
+  it("registers all twelve canonical rules", () => {
     for (const name of [
       "no-default-props",
       "no-prop-types",
@@ -88,6 +89,7 @@ describe("plugin api surface", () => {
       "no-legacy-react-dom",
       "no-legacy-react-dom-server",
       "no-legacy-test-utils-act",
+      "no-legacy-test-utils",
       "no-legacy-react-is",
       "no-shallow-renderer",
       "no-implicit-ref-callback-return",
@@ -824,6 +826,80 @@ ruleTester.run("no-legacy-test-utils-act", ruleNoLegacyTestUtilsAct, {
   valid: [
     // correct R19 import
     `import { act } from 'react'; act(() => {});`,
+    // unrelated test-utils export still legal (narrow rule; see no-legacy-test-utils)
+    `import { Simulate } from 'react-dom/test-utils'; Simulate.click(node);`,
+    `const TestUtils = require('react-dom/test-utils'); TestUtils.Simulate.click(node);`,
+    // different module
+    `import TestUtils from 'other/test-utils'; TestUtils.act(() => {});`,
+    // local identifier coincidentally named act, no test-utils binding
+    `const act = (fn) => fn(); act(() => {});`,
+    // shadowed local is not the imported namespace
+    `import TestUtils from 'react-dom/test-utils'; function useLocal(TestUtils) { TestUtils.act(() => {}); }`,
+  ],
+  invalid: [
+    // simple named import — fixable
+    {
+      code: `import { act } from 'react-dom/test-utils'; act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react'; act(() => {});`,
+    },
+    // aliased named import — alias preserved
+    {
+      code: `import { act as a } from 'react-dom/test-utils'; a(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act as a } from 'react'; a(() => {});`,
+    },
+    // mixed — split into two imports
+    {
+      code: `import { act, Simulate } from 'react-dom/test-utils';`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react';\nimport { Simulate } from 'react-dom/test-utils';`,
+    },
+    // default + named — default stays, act moves
+    {
+      code: `import TestUtils, { act } from 'react-dom/test-utils'; TestUtils.Simulate.click(node);`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { act } from 'react';\nimport TestUtils from 'react-dom/test-utils'; TestUtils.Simulate.click(node);`,
+    },
+    // namespace + act via member access — reported, not fixed
+    {
+      code: `import TestUtils from 'react-dom/test-utils'; TestUtils.act(() => {});`,
+      errors: [
+        { messageId: "noTestUtilsAct" },
+      ],
+    },
+    {
+      code: `import * as TestUtils from 'react-dom/test-utils'; TestUtils.act(() => {});`,
+      errors: [
+        { messageId: "noTestUtilsAct" },
+      ],
+    },
+    // CommonJS destructure — reported, not fixed
+    {
+      code: `const { act } = require('react-dom/test-utils'); act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // CommonJS namespace var + member access
+    {
+      code: `const TestUtils = require('react-dom/test-utils'); TestUtils.act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // inline require
+    {
+      code: `require('react-dom/test-utils').act(() => {});`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+  ],
+});
+
+// -----------------------------------------------------------------------
+// 10. no-legacy-test-utils
+// -----------------------------------------------------------------------
+
+ruleTester.run("no-legacy-test-utils", ruleNoLegacyTestUtils, {
+  valid: [
+    // correct R19 import
+    `import { act } from 'react'; act(() => {});`,
     // the modern replacement for the removed utilities
     `import { render } from '@testing-library/react'; render(<App />);`,
     // different module
@@ -927,7 +1003,7 @@ ruleTester.run("no-legacy-test-utils-act", ruleNoLegacyTestUtilsAct, {
 });
 
 // -----------------------------------------------------------------------
-// 10. no-legacy-react-is
+// 11. no-legacy-react-is
 // -----------------------------------------------------------------------
 
 ruleTester.run("no-legacy-react-is", ruleNoLegacyReactIs, {
@@ -997,7 +1073,7 @@ ruleTester.run("no-legacy-react-is", ruleNoLegacyReactIs, {
 });
 
 // -----------------------------------------------------------------------
-// 11. no-shallow-renderer
+// 12. no-shallow-renderer
 // -----------------------------------------------------------------------
 
 ruleTester.run("no-shallow-renderer", ruleNoShallowRenderer, {
@@ -1056,7 +1132,7 @@ ruleTester.run("no-shallow-renderer", ruleNoShallowRenderer, {
 });
 
 // -----------------------------------------------------------------------
-// 12. no-implicit-ref-callback-return
+// 13. no-implicit-ref-callback-return
 // -----------------------------------------------------------------------
 
 ruleTester.run(
