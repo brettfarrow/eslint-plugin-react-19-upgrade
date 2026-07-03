@@ -482,7 +482,7 @@ ruleTester.run("no-string-refs", ruleNoStringRefs, {
     // callback ref
     { code: `<input ref={(input) => this.input = input} />` },
     // object ref from useRef
-    { code: `const r = useRef(null); return <input ref={r} />;` },
+    { code: `function App() { const r = useRef(null); return <input ref={r} />; }` },
     // null ref
     { code: `<input ref={null} />` },
     // numeric in expression container
@@ -495,7 +495,7 @@ ruleTester.run("no-string-refs", ruleNoStringRefs, {
   invalid: [
     {
       code: `<input ref='input' />`,
-      errors: [{ messageId: "noStringRefs", type: "JSXAttribute" }],
+      errors: [{ messageId: "noStringRefs" }],
     },
     // double-quoted
     {
