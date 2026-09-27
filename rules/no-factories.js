@@ -1,19 +1,3 @@
-function findVariable(scope, name) {
-  let currentScope = scope;
-
-  while (currentScope) {
-    const variable = currentScope.variables.find((item) => item.name === name);
-
-    if (variable) {
-      return variable;
-    }
-
-    currentScope = currentScope.upper;
-  }
-
-  return null;
-}
-
 function isUppercaseName(name) {
   return typeof name === "string" && /^[A-Z]/.test(name);
 }
@@ -87,57 +71,47 @@ function isReactCreateFactoryMemberExpression(node) {
   );
 }
 
-function resolvesToReactCreateFactory(context, node) {
-  if (node.callee.type !== "Identifier") {
-    return false;
+function getLocalName(property) {
+  if (property.value.type === "Identifier") {
+    return property.value.name;
   }
 
-  const sourceCode = context.sourceCode ?? context.getSourceCode();
-  const scope = sourceCode.getScope
-    ? sourceCode.getScope(node)
-    : context.getScope();
-  const variable = findVariable(scope, node.callee.name);
-
-  if (!variable || variable.defs.length === 0) {
-    return false;
+  if (property.value.left && property.value.left.type === "Identifier") {
+    return property.value.left.name;
   }
 
-  const definitionNode = variable.defs[0].node;
+  return null;
+}
 
-  if (!definitionNode || definitionNode.type !== "VariableDeclarator") {
-    return false;
+// Local names bound to React.createFactory by this declarator, e.g.
+// `const cf = React.createFactory` or `const { createFactory: cf } = React`.
+function getCreateFactoryAliasNames(node) {
+  const names = new Set();
+
+  if (node.id.type === "Identifier") {
+    if (isReactCreateFactoryMemberExpression(node.init)) {
+      names.add(node.id.name);
+    }
+    return names;
   }
 
-  if (
-    definitionNode.id.type === "Identifier" &&
-    isReactCreateFactoryMemberExpression(definitionNode.init)
-  ) {
-    return true;
+  if (node.id.type !== "ObjectPattern" || !isReactLikeObject(node.init)) {
+    return names;
   }
 
-  if (
-    definitionNode.id.type === "ObjectPattern" &&
-    isReactLikeObject(definitionNode.init)
-  ) {
-    return definitionNode.id.properties.some((property) => {
-      if (property.type !== "Property" || property.computed) {
-        return false;
-      }
+  for (const property of node.id.properties) {
+    if (property.type !== "Property" || property.computed) continue;
 
-      const keyName =
-        property.key.type === "Identifier" ? property.key.name : property.key.value;
-      const localName =
-        property.value.type === "Identifier"
-          ? property.value.name
-          : property.value.left && property.value.left.type === "Identifier"
-            ? property.value.left.name
-            : null;
+    const keyName =
+      property.key.type === "Identifier" ? property.key.name : property.key.value;
 
-      return keyName === "createFactory" && localName === node.callee.name;
-    });
+    if (keyName === "createFactory") {
+      const localName = getLocalName(property);
+      if (localName) names.add(localName);
+    }
   }
 
-  return false;
+  return names;
 }
 
 module.exports = {
@@ -158,6 +132,14 @@ module.exports = {
     hasSuggestions: true,
   },
   create(context) {
+    const sourceCode = context.sourceCode ?? context.getSourceCode();
+
+    function getDeclaredVariables(node) {
+      return sourceCode.getDeclaredVariables
+        ? sourceCode.getDeclaredVariables(node)
+        : context.getDeclaredVariables(node);
+    }
+
     return {
       ReturnStatement(node) {
         if (
@@ -193,11 +175,27 @@ module.exports = {
           });
         }
       },
+      VariableDeclarator(node) {
+        const aliasNames = getCreateFactoryAliasNames(node);
+        if (aliasNames.size === 0) return;
+
+        // Report calls through the alias from its references, so ordinary
+        // calls elsewhere in the file never need a scope lookup.
+        for (const variable of getDeclaredVariables(node)) {
+          if (!aliasNames.has(variable.name)) continue;
+
+          for (const reference of variable.references) {
+            const { identifier } = reference;
+            const parent = identifier.parent;
+
+            if (parent && parent.type === "CallExpression" && parent.callee === identifier) {
+              context.report({ node: parent, messageId: "noCreateFactory" });
+            }
+          }
+        }
+      },
       CallExpression(node) {
-        if (
-          isReactCreateFactoryMemberExpression(node.callee) ||
-          resolvesToReactCreateFactory(context, node)
-        ) {
+        if (isReactCreateFactoryMemberExpression(node.callee)) {
           context.report({
             node,
             messageId: "noCreateFactory",

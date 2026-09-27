@@ -567,6 +567,8 @@ ruleTester.run("no-factories", ruleNoFactories, {
     `import { createFactory } from 'other'; const d = createFactory('div');`,
     // destructure from a require() of a different package
     `const { createFactory } = require('other'); const d = createFactory('div');`,
+    // parameter shadows the alias — not the createFactory binding
+    `const cf = React.createFactory; function make(cf) { return cf('div'); }`,
   ],
   invalid: [
     // classic module-pattern factory
@@ -618,6 +620,11 @@ ruleTester.run("no-factories", ruleNoFactories, {
     {
       code: `const d = require('react').createFactory('div');`,
       errors: [{ messageId: "noCreateFactory" }],
+    },
+    // alias called inside functions, including above the declaration
+    {
+      code: `function a() { return cf('a'); } const cf = React.createFactory; function b() { return cf('b'); }`,
+      errors: [{ messageId: "noCreateFactory" }, { messageId: "noCreateFactory" }],
     },
   ],
 });
@@ -746,6 +753,11 @@ ruleTester.run("no-legacy-react-dom", ruleNoLegacyReactDom, {
       code: `require('react-dom').unstable_runWithPriority(priority, fn);`,
       errors: [{ messageId: "noUnstableRunWithPriority" }],
     },
+    // namespace used in a function declared above the require
+    {
+      code: `function mount() { ReactDOM.render(<App />, root); } const ReactDOM = require('react-dom');`,
+      errors: [{ messageId: "noRender" }],
+    },
   ],
 });
 
@@ -813,6 +825,11 @@ ruleTester.run("no-legacy-react-dom-server", ruleNoLegacyReactDomServer, {
     // inline require
     {
       code: `require('react-dom/server').renderToNodeStream(<App />);`,
+      errors: [{ messageId: "noRenderToNodeStream" }],
+    },
+    // namespace used in a function declared above the require
+    {
+      code: `function ssr() { return Server.renderToNodeStream(<App />); } const Server = require('react-dom/server');`,
       errors: [{ messageId: "noRenderToNodeStream" }],
     },
   ],
@@ -888,6 +905,17 @@ ruleTester.run("no-legacy-test-utils-act", ruleNoLegacyTestUtilsAct, {
     {
       code: `require('react-dom/test-utils').act(() => {});`,
       errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // namespace used in a function declared above the require
+    {
+      code: `function run() { TestUtils.act(() => {}); } const TestUtils = require('react-dom/test-utils');`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+    },
+    // string-literal specifiers keep their names in the rebuilt import
+    {
+      code: `import { "act" as a, "Simulate" as S } from 'react-dom/test-utils';`,
+      errors: [{ messageId: "noTestUtilsAct" }],
+      output: `import { "act" as a } from 'react';\nimport { "Simulate" as S } from 'react-dom/test-utils';`,
     },
   ],
 });
@@ -1068,6 +1096,11 @@ ruleTester.run("no-legacy-react-is", ruleNoLegacyReactIs, {
     {
       code: `require('react-is').isConcurrentMode(x);`,
       errors: [{ messageId: "noIsConcurrentMode" }],
+    },
+    // namespace used in a function declared above the require
+    {
+      code: `function check(x) { return ReactIs.isAsyncMode(x); } const ReactIs = require('react-is');`,
+      errors: [{ messageId: "noIsAsyncMode" }],
     },
   ],
 });

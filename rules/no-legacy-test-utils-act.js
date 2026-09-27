@@ -2,22 +2,6 @@
 
 const SOURCE = "react-dom/test-utils";
 
-function findVariable(scope, name) {
-  let currentScope = scope;
-
-  while (currentScope) {
-    const variable = currentScope.variables.find((item) => item.name === name);
-
-    if (variable) {
-      return variable;
-    }
-
-    currentScope = currentScope.upper;
-  }
-
-  return null;
-}
-
 function isRequireTestUtils(node) {
   return (
     node &&
@@ -30,12 +14,20 @@ function isRequireTestUtils(node) {
   );
 }
 
+function importedName(spec) {
+  if (!spec.imported) return null;
+  return spec.imported.name ?? spec.imported.value;
+}
+
 function specifierToText(spec) {
   if (spec.type !== "ImportSpecifier") return null;
-  if (spec.local.name === spec.imported.name) {
-    return spec.imported.name;
+  if (spec.local.name === importedName(spec)) {
+    return spec.local.name;
   }
-  return `${spec.imported.name} as ${spec.local.name}`;
+  // Keep string-literal names quoted: `import { "a-b" as ab }`.
+  const imported =
+    spec.imported.type === "Literal" ? spec.imported.raw : spec.imported.name;
+  return `${imported} as ${spec.local.name}`;
 }
 
 function rebuildImport(specs, source, quote) {
@@ -81,23 +73,31 @@ module.exports = {
   },
   create(context) {
     const sourceCode = context.sourceCode ?? context.getSourceCode();
-    const testUtilsNamespaceVariables = new Set();
 
     function trackNamespace(node) {
-      const [variable] = sourceCode.getDeclaredVariables(node);
+      const [variable] = sourceCode.getDeclaredVariables
+        ? sourceCode.getDeclaredVariables(node)
+        : context.getDeclaredVariables(node);
 
-      if (variable) {
-        testUtilsNamespaceVariables.add(variable);
+      if (!variable) return;
+
+      // Check member accesses through the namespace's references rather than
+      // resolving scope per MemberExpression; this also catches uses that
+      // appear above the declaration.
+      for (const { identifier } of variable.references) {
+        const parent = identifier.parent;
+
+        if (
+          parent &&
+          parent.type === "MemberExpression" &&
+          parent.object === identifier &&
+          !parent.computed &&
+          parent.property.type === "Identifier" &&
+          parent.property.name === "act"
+        ) {
+          context.report({ node: parent, messageId: "noTestUtilsAct" });
+        }
       }
-    }
-
-    function isTrackedNamespaceIdentifier(node) {
-      const scope = sourceCode.getScope
-        ? sourceCode.getScope(node)
-        : context.getScope();
-      const variable = findVariable(scope, node.name);
-
-      return Boolean(variable && testUtilsNamespaceVariables.has(variable));
     }
 
     return {
@@ -110,8 +110,7 @@ module.exports = {
         for (const spec of node.specifiers) {
           if (
             spec.type === "ImportSpecifier" &&
-            spec.imported &&
-            spec.imported.name === "act"
+            importedName(spec) === "act"
           ) {
             actSpecs.push(spec);
           } else {
@@ -183,14 +182,6 @@ module.exports = {
           node.property.type !== "Identifier" ||
           node.property.name !== "act"
         ) {
-          return;
-        }
-
-        if (
-          node.object.type === "Identifier" &&
-          isTrackedNamespaceIdentifier(node.object)
-        ) {
-          context.report({ node, messageId: "noTestUtilsAct" });
           return;
         }
 
