@@ -22,9 +22,12 @@ function importedName(spec) {
 function specifierToText(spec) {
   if (spec.type !== "ImportSpecifier") return null;
   if (spec.local.name === importedName(spec)) {
-    return importedName(spec);
+    return spec.local.name;
   }
-  return `${importedName(spec)} as ${spec.local.name}`;
+  // Keep string-literal names quoted: `import { "a-b" as ab }`.
+  const imported =
+    spec.imported.type === "Literal" ? spec.imported.raw : spec.imported.name;
+  return `${imported} as ${spec.local.name}`;
 }
 
 function rebuildImport(specs, source, quote) {

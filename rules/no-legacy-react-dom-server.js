@@ -7,22 +7,6 @@ const REMOVED_APIS = {
   renderToStaticNodeStream: "noRenderToStaticNodeStream",
 };
 
-function findVariable(scope, name) {
-  let currentScope = scope;
-
-  while (currentScope) {
-    const variable = currentScope.variables.find((item) => item.name === name);
-
-    if (variable) {
-      return variable;
-    }
-
-    currentScope = currentScope.upper;
-  }
-
-  return null;
-}
-
 function isRequireSource(node) {
   return (
     node &&
@@ -55,23 +39,33 @@ module.exports = {
   },
   create(context) {
     const sourceCode = context.sourceCode ?? context.getSourceCode();
-    const namespaceVariables = new Set();
 
     function trackNamespace(node) {
-      const [variable] = sourceCode.getDeclaredVariables(node);
+      const [variable] = sourceCode.getDeclaredVariables
+        ? sourceCode.getDeclaredVariables(node)
+        : context.getDeclaredVariables(node);
 
-      if (variable) {
-        namespaceVariables.add(variable);
+      if (!variable) return;
+
+      // Check member accesses through the namespace's references rather than
+      // resolving scope per MemberExpression; this also catches uses that
+      // appear above the declaration.
+      for (const { identifier } of variable.references) {
+        const parent = identifier.parent;
+
+        if (
+          parent &&
+          parent.type === "MemberExpression" &&
+          parent.object === identifier &&
+          !parent.computed &&
+          parent.property.type === "Identifier"
+        ) {
+          const messageId = REMOVED_APIS[parent.property.name];
+          if (messageId) {
+            context.report({ node: parent, messageId });
+          }
+        }
       }
-    }
-
-    function isTrackedNamespaceIdentifier(node) {
-      const scope = sourceCode.getScope
-        ? sourceCode.getScope(node)
-        : context.getScope();
-      const variable = findVariable(scope, node.name);
-
-      return Boolean(variable && namespaceVariables.has(variable));
     }
 
     return {
@@ -124,14 +118,6 @@ module.exports = {
 
         const messageId = REMOVED_APIS[node.property.name];
         if (!messageId) return;
-
-        if (
-          node.object.type === "Identifier" &&
-          isTrackedNamespaceIdentifier(node.object)
-        ) {
-          context.report({ node, messageId });
-          return;
-        }
 
         if (isRequireSource(node.object)) {
           context.report({ node, messageId });

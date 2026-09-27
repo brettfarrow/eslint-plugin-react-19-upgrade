@@ -2,7 +2,7 @@ function findVariable(scope, name) {
   let currentScope = scope;
 
   while (currentScope) {
-    const variable = currentScope.variables.find((item) => item.name === name);
+    const variable = currentScope.set.get(name);
 
     if (variable) {
       return variable;

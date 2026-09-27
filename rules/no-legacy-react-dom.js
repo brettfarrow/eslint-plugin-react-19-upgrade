@@ -14,22 +14,6 @@ const REMOVED_APIS = {
   unstable_runWithPriority: "noUnstableRunWithPriority",
 };
 
-function findVariable(scope, name) {
-  let currentScope = scope;
-
-  while (currentScope) {
-    const variable = currentScope.variables.find((item) => item.name === name);
-
-    if (variable) {
-      return variable;
-    }
-
-    currentScope = currentScope.upper;
-  }
-
-  return null;
-}
-
 function isRequireReactDom(node) {
   return (
     node &&
@@ -76,7 +60,6 @@ module.exports = {
   },
   create(context) {
     const sourceCode = context.sourceCode ?? context.getSourceCode();
-    const namespaceVariables = new Set();
 
     function reportApi(node, apiName) {
       const messageId = REMOVED_APIS[apiName];
@@ -85,20 +68,28 @@ module.exports = {
     }
 
     function trackNamespace(node) {
-      const [variable] = sourceCode.getDeclaredVariables(node);
+      const [variable] = sourceCode.getDeclaredVariables
+        ? sourceCode.getDeclaredVariables(node)
+        : context.getDeclaredVariables(node);
 
-      if (variable) {
-        namespaceVariables.add(variable);
+      if (!variable) return;
+
+      // Check member accesses through the namespace's references rather than
+      // resolving scope per MemberExpression; this also catches uses that
+      // appear above the declaration.
+      for (const { identifier } of variable.references) {
+        const parent = identifier.parent;
+
+        if (
+          parent &&
+          parent.type === "MemberExpression" &&
+          parent.object === identifier &&
+          !parent.computed &&
+          parent.property.type === "Identifier"
+        ) {
+          reportApi(parent, parent.property.name);
+        }
       }
-    }
-
-    function isTrackedNamespaceIdentifier(node) {
-      const scope = sourceCode.getScope
-        ? sourceCode.getScope(node)
-        : context.getScope();
-      const variable = findVariable(scope, node.name);
-
-      return Boolean(variable && namespaceVariables.has(variable));
     }
 
     return {
@@ -152,14 +143,6 @@ module.exports = {
 
         const apiName = node.property.name;
         if (!REMOVED_APIS[apiName]) return;
-
-        if (
-          node.object.type === "Identifier" &&
-          isTrackedNamespaceIdentifier(node.object)
-        ) {
-          reportApi(node, apiName);
-          return;
-        }
 
         if (isRequireReactDom(node.object)) {
           reportApi(node, apiName);
